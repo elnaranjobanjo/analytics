@@ -1,75 +1,91 @@
-from dolfin import *
+import fenics as fe
 import matplotlib.pyplot as plt
 import numpy as np
+from dataclasses import dataclass
 
-# Define function G such that G \cdot n = g
-class BoundarySource(UserExpression):
-    def __init__(self, mesh, **kwargs):
-        self.mesh = mesh
-        super().__init__(**kwargs)
-    def eval_cell(self, values, x, ufc_cell):
-        cell = Cell(self.mesh, ufc_cell.index)
-        n = cell.normal(ufc_cell.local_facet)
-        #g = sin(5*x[0])
-        g = 0
-        values[0] = g*n[0]
-        values[1] = g*n[1]
-        
-    def value_shape(self):
-        return (2,)
 
-# Define essential boundary
-def boundary(x):
-    #return x[1] < DOLFIN_EPS or x[1] > 1.0 - DOLFIN_EPS
-    return False 
+# Solves:
+#       div u = f
+#    A grad p = u
+#           u = 0  b.c
+# Generates data for the sampling of the mapping A -> (u,p)
+class DarcyGenerator:
+    def __init__(self, params):
+        self.mesh = params.mesh
+        self.degree = params.degree
+        self.g = fe.Expression(params.g, degree=params.degree)
+        self.f = fe.Expression(params.f, degree=params.degree - 1)
 
-def compute_velocities(h,material_prop, f):
-    A = Constant(((material_prop[0,0], material_prop[0,1]), (material_prop[1,0], material_prop[1,1])))
-    mesh = UnitSquareMesh(round(1/(h*np.sqrt(2))), round(1/(h*np.sqrt(2))))
+    def find_velocities(
+        self,
+        A,
+        if_plot=False,
+        supress_fe_log=True,
+        out_format="fenics",
+    ):
+        BDM = fe.FiniteElement("BDM", self.mesh.ufl_cell(), self.degree)
+        DG = fe.FiniteElement("DG", self.mesh.ufl_cell(), self.degree - 1)
+        W = fe.FunctionSpace(self.mesh, BDM * DG)
 
-    # Define finite elements spaces and build mixed space
-    BDM = FiniteElement("BDM", mesh.ufl_cell(), 1, variant="integral")
-    DG  = FiniteElement("DG", mesh.ufl_cell(), 0)
-    W = FunctionSpace(mesh, BDM * DG)
+        (u, p) = fe.TrialFunctions(W)
+        (v, q) = fe.TestFunctions(W)
 
-    # Define trial and test function
-    (u, p) = TrialFunctions(W)
-    (v, q) = TestFunctions(W)
+        a = (
+            fe.dot(
+                fe.Constant(
+                    (
+                        (A[0, 0], A[0, 1], A[0, 2]),
+                        (A[1, 0], A[1, 1], A[1, 2]),
+                        (A[2, 0], A[2, 1], A[2, 2]),
+                    )
+                )
+                * u,
+                v,
+            )
+            + fe.div(v) * p
+            + fe.div(u) * q
+        ) * fe.dx
+        L = -self.f * q * fe.dx
 
-    # Define variational form
+        w = fe.Function(W)
 
-    a = (dot(A * u, v) + div(v)*p + div(u)*q)*dx
-    L = - f*q*dx
+        if supress_fe_log:
+            fe.set_log_level(50)
 
-    G = BoundarySource(mesh, degree=2)
+        fe.solve(a == L, w, fe.DirichletBC(W, self.g, "on_boundary"))
+        (u, p) = w.split()
 
-    bc = DirichletBC(W.sub(0), G, boundary)
+        # if if_plot:
+        #    self.plot(u, p)
 
-    # Compute solution
-    w = Function(W)
-    solve(a == L, w, bc)
-    (u,p) = w.split()
-    return (u,p)
+        if out_format == "fenics":
+            return w.split()
+        if out_format == "numpy":
+            return (u.vector().get_local(), p.vector().get_local())
 
-def plot_up(u,p):
-    # Plot sigma and u
-    plt.figure()
-    plot(u)
 
-    plt.figure()
-    plot(p)
+@dataclass
+class DarcySimParams:
+    h: float = 0.1
+    mesh: fe.Mesh = fe.UnitCubeMesh(10, 10, 10)
+    degree: int = 1
+    g: str = ("0", "0", "0")
+    f: str = "1"
 
-    plt.show()
 
-def make_into_np_ndarray(u,p):
-    return (u.vector().get_local(),p.vector().get_local())
-
-if __name__ == '__main__':
-   material_matrix = np.array([[1,0],[0,1]])
-   # Define source function
-   f = Expression("1", degree=2)
-   h = 0.1
-   (u,p) = compute_velocities(h,material_matrix,f)
-   #(nd_u,nd_p) = make_into_np_ndarray(u,p)
-   #print(f'{np.max(nd_u ) = }')
-   plot_up(u,p)
+if __name__ == "__main__":
+    h = 0.1
+    test_params = DarcySimParams(
+        h=h,
+        mesh=fe.UnitCubeMesh(
+            round(1 / (h * np.sqrt(2))),
+            round(1 / (h * np.sqrt(2))),
+            round(1 / (h * np.sqrt(2))),
+        ),
+        f="1",
+        g=("0", "0", "0"),
+    )
+    A = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+    generator = DarcyGenerator(test_params)
+    (u, p) = generator.find_velocities(A, if_plot="false", out_format="fenics")
+    print("Finished")
