@@ -1,3 +1,4 @@
+from typing import Tuple
 import fenics as fe
 import matplotlib.pyplot as plt
 import numpy as np
@@ -7,7 +8,7 @@ from dataclasses import dataclass
 # Solves:
 #       div u = f
 #    A grad p = u
-#           p = g  b.c
+#           p = g  b.c.
 # Generates data for the sampling of the mapping A -> (u,p)
 
 
@@ -21,25 +22,36 @@ class DarcySimParams:
 
 
 class DarcyGenerator:
-    def __init__(self, params):
+    mesh: fe.Mesh
+    degree: int
+    g: fe.Expression
+    f: fe.Expression
+    model_space: fe.FunctionSpace
+
+    def __init__(self, params: DarcySimParams):
         self.mesh = params.mesh
         self.degree = params.degree
         self.g = fe.Expression(params.g, degree=params.degree)
         self.f = fe.Expression(params.f, degree=params.degree - 1)
+        self.model_space = fe.FunctionSpace(
+            self.mesh,
+            fe.FiniteElement("BDM", self.mesh.ufl_cell(), self.degree)
+            * fe.FiniteElement("DG", self.mesh.ufl_cell(), self.degree - 1),
+        )
 
-    def find_velocities(
+    def compute_solution(
+        self, A: np.array, supress_fe_log: bool = True
+    ) -> tuple[np.array, np.array]:
+        (u, p) = self.solve_variational_form(A, supress_fe_log=supress_fe_log)
+        return (u.vector().get_local(), p.vector().get_local())
+
+    def solve_variational_form(
         self,
-        A,
-        if_plot=False,
-        supress_fe_log=True,
-        out_format="fenics",
-    ):
-        BDM = fe.FiniteElement("BDM", self.mesh.ufl_cell(), self.degree)
-        DG = fe.FiniteElement("DG", self.mesh.ufl_cell(), self.degree - 1)
-        W = fe.FunctionSpace(self.mesh, BDM * DG)
-
-        (u, p) = fe.TrialFunctions(W)
-        (v, q) = fe.TestFunctions(W)
+        A: np.array,
+        supress_fe_log: bool = True,
+    ) -> tuple[fe.Function, fe.Function]:
+        (u, p) = fe.TrialFunctions(self.model_space)
+        (v, q) = fe.TestFunctions(self.model_space)
         Ainv = np.linalg.inv(A)
         a = (
             fe.dot(
@@ -51,21 +63,15 @@ class DarcyGenerator:
         ) * fe.dx
         L = -self.f * q * fe.dx
 
-        w = fe.Function(W)
-
         if supress_fe_log:
             fe.set_log_level(50)
 
-        fe.solve(a == L, w, fe.DirichletBC(W.sub(1), self.g, "on_boundary"))
-        (u, p) = w.split()
+        sol = fe.Function(self.model_space)
+        fe.solve(
+            a == L, sol, fe.DirichletBC(self.model_space.sub(1), self.g, "on_boundary")
+        )
 
-        # if if_plot:
-        #    self.plot(u, p)
-
-        if out_format == "fenics":
-            return w.split()
-        if out_format == "numpy":
-            return (u.vector().get_local(), p.vector().get_local())
+        return sol.split()
 
 
 if __name__ == "__main__":
@@ -82,8 +88,8 @@ if __name__ == "__main__":
     )
     A = np.array([[1, 0], [0, 1]])
     generator = DarcyGenerator(test_params)
-    (u, p) = generator.find_velocities(A, if_plot="false", out_format="numpy")
-    print(f"{np.max(u) = }")
+    (u, p) = generator.solve_variational_form(A)
+    # print(f"{np.max(u) = }")
     u_exact = fe.Expression(("3*pow(x[0],2)", "3*pow(x[1],2)"), degree=1)
     p_exact = fe.Expression("pow(x[0],3)+pow(x[1],3)", degree=0)
     # u_diff.vector()[:] = u.vector() - u_exact.vector()
