@@ -49,11 +49,11 @@ class DarcyGenerator:
     ) -> tuple[fe.Function, fe.Function]:
         (u, p) = fe.TrialFunctions(self.model_space)
         (v, q) = fe.TestFunctions(self.model_space)
-        # Ainv = np.linalg.inv(A)
-        # fe.Constant(((Ainv[0, 0], Ainv[0, 1]), (Ainv[1, 0], Ainv[1, 1]))) *
+        Ainv = np.linalg.inv(A)
+
         a = (
             fe.dot(
-                u,
+                fe.Constant(((Ainv[0, 0], Ainv[0, 1]), (Ainv[1, 0], Ainv[1, 1]))) * u,
                 v,
             )
             + fe.div(v) * p
@@ -65,10 +65,7 @@ class DarcyGenerator:
             fe.set_log_level(50)
 
         sol = fe.Function(self.model_space)
-        fe.solve(
-            a == L,
-            sol
-        )
+        fe.solve(a == L, sol)
         print(f"in gen {self.model_space.mesh().num_cells() = }")
         print(f"in gen {self.mesh.num_cells() = }")
         return sol

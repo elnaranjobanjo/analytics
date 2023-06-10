@@ -7,7 +7,10 @@ import numpy as np
 if __name__ == "__main__":
     hs = [0.5, 0.25, 0.125]
     degree = 5
-    u_expression = ("x[1]*(1-x[1])*(1-2*x[0])", "x[0]*(1-x[0])*(1-2*x[1])")
+    u_expression = (
+        "5*x[1]*(1-x[1])*(1-2*x[0])+x[0]*(1-x[0])*(1-2*x[1])",
+        "5*x[0]*(1-x[0])*(1-2*x[1])+x[1]*(1-x[1])*(1-2*x[0])",
+    )
     p_expression = "x[0]*x[1]*(1-x[0])*(1-x[1])"
     for h in hs:
         print(f"{h = }")
@@ -18,9 +21,9 @@ if __name__ == "__main__":
                 round(1 / (h * np.sqrt(2))),
             ),
             degree=degree,
-            f="-2*x[1]*(1-x[1])-2*x[0]*(1-x[0])",
+            f="-10*x[1]*(1-x[1])-10*x[0]*(1-x[0])+2*(1-2*x[0])*(1-2*x[1])",
         )
-        A = np.array([[1, 0], [0, 1]])
+        A = np.array([[5, 1], [1, 5]])
         generator = DarcyGenerator(test_params)
 
         print(f"{generator.mesh.num_cells() = }")
