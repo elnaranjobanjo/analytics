@@ -8,7 +8,7 @@ from dataclasses import dataclass
 # Solves:
 #       div u = f
 #    A grad p = u
-#           p = g  b.c.
+#           p = 0  b.c.
 # Generates data for the sampling of the mapping A -> (u,p)
 
 
@@ -17,22 +17,19 @@ class DarcySimParams:
     h: float = 0.1
     mesh: fe.Mesh = fe.UnitSquareMesh(10, 10)
     degree: int = 1
-    g: str = "0"
     f: str = "1"
 
 
 class DarcyGenerator:
     mesh: fe.Mesh
     degree: int
-    g: fe.Expression
     f: fe.Expression
     model_space: fe.FunctionSpace
 
     def __init__(self, params: DarcySimParams):
         self.mesh = params.mesh
         self.degree = params.degree
-        self.g = fe.Expression(params.g, degree=params.degree)
-        self.f = fe.Expression(params.f, degree=params.degree - 1)
+        self.f = fe.Expression(params.f, degree=2)
         self.model_space = fe.FunctionSpace(
             self.mesh,
             fe.FiniteElement("BDM", self.mesh.ufl_cell(), self.degree)
@@ -62,18 +59,16 @@ class DarcyGenerator:
             + fe.div(v) * p
             + fe.div(u) * q
         ) * fe.dx
-        L = -self.f * q * fe.dx
+        L = self.f * q * fe.dx
 
         if supress_fe_log:
             fe.set_log_level(50)
 
         sol = fe.Function(self.model_space)
         fe.solve(
-            a == L, sol, fe.DirichletBC(self.model_space.sub(1), self.g, "on_boundary")
+            a == L,
+            sol
         )
         print(f"in gen {self.model_space.mesh().num_cells() = }")
         print(f"in gen {self.mesh.num_cells() = }")
         return sol
-
-    def get_model_space(self) -> fe.FunctionSpace:
-        return self.model_space

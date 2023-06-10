@@ -3,17 +3,12 @@ import matplotlib.pyplot as plt
 import fenics as fe
 import numpy as np
 
-# f="6*x[0]+6*x[1]",
-# g="pow(x[0],3)+pow(x[1],3)",
-# u_expression = ("3*pow(x[0],2)", "3*pow(x[1],2)")
-# p_expression = "pow(x[0],3)+pow(x[1],3)"
-
 # def test_darcy_generator():
 if __name__ == "__main__":
     hs = [0.5, 0.25, 0.125]
-    degree = 1
-    u_expression = ("1", "1")
-    p_expression = "1-pow(x[0],2)+pow(x[1],2)"
+    degree = 5
+    u_expression = ("x[1]*(1-x[1])*(1-2*x[0])", "x[0]*(1-x[0])*(1-2*x[1])")
+    p_expression = "x[0]*x[1]*(1-x[0])*(1-x[1])"
     for h in hs:
         print(f"{h = }")
         test_params = DarcySimParams(
@@ -23,8 +18,7 @@ if __name__ == "__main__":
                 round(1 / (h * np.sqrt(2))),
             ),
             degree=degree,
-            f="0",
-            g="0",
+            f="-2*x[1]*(1-x[1])-2*x[0]*(1-x[0])",
         )
         A = np.array([[1, 0], [0, 1]])
         generator = DarcyGenerator(test_params)
