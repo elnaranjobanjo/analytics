@@ -42,7 +42,7 @@ class DarcyGenerator:
     def compute_solution(
         self, A: np.array, supress_fe_log: bool = True
     ) -> tuple[np.array, np.array]:
-        (u, p) = self.solve_variational_form(A, supress_fe_log=supress_fe_log)
+        (u, p) = self.solve_variational_form(A, supress_fe_log=supress_fe_log).split()
         return (u.vector().get_local(), p.vector().get_local())
 
     def solve_variational_form(
@@ -52,10 +52,11 @@ class DarcyGenerator:
     ) -> tuple[fe.Function, fe.Function]:
         (u, p) = fe.TrialFunctions(self.model_space)
         (v, q) = fe.TestFunctions(self.model_space)
-        Ainv = np.linalg.inv(A)
+        # Ainv = np.linalg.inv(A)
+        # fe.Constant(((Ainv[0, 0], Ainv[0, 1]), (Ainv[1, 0], Ainv[1, 1]))) *
         a = (
             fe.dot(
-                fe.Constant(((Ainv[0, 0], Ainv[0, 1]), (Ainv[1, 0], Ainv[1, 1]))) * u,
+                u,
                 v,
             )
             + fe.div(v) * p
@@ -70,16 +71,9 @@ class DarcyGenerator:
         fe.solve(
             a == L, sol, fe.DirichletBC(self.model_space.sub(1), self.g, "on_boundary")
         )
+        print(f"in gen {self.model_space.mesh().num_cells() = }")
+        print(f"in gen {self.mesh.num_cells() = }")
+        return sol
 
-        return sol.split()
-
-    # This is for the purposes of testing against a manufactured solution
-    def turn_into_mesh_funcs(
-        self, u_expression: str, p_expression: str
-    ) -> Tuple[fe.Function, fe.Function]:
-        return fe.interpolate(
-            fe.Expression(
-                (u_expression[0], u_expression[1], p_expression), degree=self.degree
-            ),
-            self.model_space,
-        ).split()
+    def get_model_space(self) -> fe.FunctionSpace:
+        return self.model_space
