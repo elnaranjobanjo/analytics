@@ -73,24 +73,13 @@ class DarcyGenerator:
 
         return sol.split()
 
-
-if __name__ == "__main__":
-    h = 0.1
-    test_params = DarcySimParams(
-        h=h,
-        mesh=fe.UnitSquareMesh(
-            round(1 / (h * np.sqrt(2))),
-            round(1 / (h * np.sqrt(2))),
-        ),
-        degree=3,
-        f="6*x[0]+6*x[1]",
-        g="pow(x[0],3)+pow(x[1],3)",
-    )
-    A = np.array([[1, 0], [0, 1]])
-    generator = DarcyGenerator(test_params)
-    (u, p) = generator.solve_variational_form(A)
-    # print(f"{np.max(u) = }")
-    u_exact = fe.Expression(("3*pow(x[0],2)", "3*pow(x[1],2)"), degree=1)
-    p_exact = fe.Expression("pow(x[0],3)+pow(x[1],3)", degree=0)
-    # u_diff.vector()[:] = u.vector() - u_exact.vector()
-    print("Finished")
+    # This is for the purposes of testing against a manufactured solution
+    def turn_into_mesh_funcs(
+        self, u_expression: str, p_expression: str
+    ) -> Tuple[fe.Function, fe.Function]:
+        return fe.interpolate(
+            fe.Expression(
+                (u_expression[0], u_expression[1], p_expression), degree=self.degree
+            ),
+            self.model_space,
+        ).split()
