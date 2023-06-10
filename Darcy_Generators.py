@@ -12,6 +12,26 @@ from dataclasses import dataclass
 # Generates data for the sampling of the mapping A -> (u,p)
 
 
+def boundary(x):
+    return x[1] < fe.DOLFIN_EPS or x[1] > 1.0 - fe.DOLFIN_EPS
+
+
+class BoundarySource(fe.UserExpression):
+    def __init__(self, mesh, **kwargs):
+        self.mesh = mesh
+        super().__init__(**kwargs)
+
+    def eval_cell(self, values, x, ufc_cell):
+        cell = fe.Cell(self.mesh, ufc_cell.index)
+        n = cell.normal(ufc_cell.local_facet)
+        g = fe.sin(5 * x[0])
+        values[0] = g * n[0]
+        values[1] = g * n[1]
+
+    def value_shape(self):
+        return (2,)
+
+
 @dataclass
 class DarcySimParams:
     h: float = 0.1
@@ -31,8 +51,8 @@ class DarcyGenerator:
     def __init__(self, params: DarcySimParams):
         self.mesh = params.mesh
         self.degree = params.degree
-        self.g = fe.Expression(params.g, degree=params.degree)
-        self.f = fe.Expression(params.f, degree=params.degree - 1)
+        self.g = fe.Expression(params.g, degree=2)
+        self.f = fe.Expression(params.f, degree=2)
         self.model_space = fe.FunctionSpace(
             self.mesh,
             fe.FiniteElement("BDM", self.mesh.ufl_cell(), self.degree)
@@ -69,7 +89,11 @@ class DarcyGenerator:
 
         sol = fe.Function(self.model_space)
         fe.solve(
-            a == L, sol, fe.DirichletBC(self.model_space.sub(1), self.g, "on_boundary")
+            a == L,
+            sol,
+            fe.DirichletBC(
+                self.model_space.sub(0), BoundarySource(self.mesh, degree=2), boundary
+            ),
         )
         print(f"in gen {self.model_space.mesh().num_cells() = }")
         print(f"in gen {self.mesh.num_cells() = }")
