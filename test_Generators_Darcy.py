@@ -1,4 +1,4 @@
-from Darcy_Generators import Darcy_Solver, DarcySimParams, generate_data_using_eig_rep
+from Generators_Darcy import Darcy_Solver, DarcySimParams, generate_data_using_eig_rep
 import matplotlib.pyplot as plt
 import fenics as fe
 import numpy as np
