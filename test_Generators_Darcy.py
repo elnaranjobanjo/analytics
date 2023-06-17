@@ -80,5 +80,5 @@ if __name__ == "__main__":
         f="10",
     )
     eigen_range = [5, 15]
-
-    generate_data_using_eig_rep(test_params, eigen_range, 2, "test_data")
+    N = 10
+    generate_data_using_eig_rep(test_params, eigen_range, N, "test_data")
