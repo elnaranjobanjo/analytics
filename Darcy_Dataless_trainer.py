@@ -37,10 +37,18 @@ class Darcy_nn(nn.Module):
         return x
 
 
+class Darcy_Energy_Loss(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, output, target):
+        return torch.tensor(1)
+
+
 @dataclass
 class DatalessDarcyTrainingParams:
     h: float = 0.1
-    Mesh: fe.Mesh = fe.UnitSquareMesh(10, 10)
+    mesh: fe.Mesh = fe.UnitSquareMesh(10, 10)
     degree: int = 1
     f: str = "10"
     A_matrix_params: list[float] = field(default_factory=list)  # eig_1,eig_2,theta
@@ -56,40 +64,66 @@ def get_matrix_params_from(A: np.array) -> list:
     return [eig_vals[0], eig_vals[1], np.arctan2(sin_theta, cos_theta)]
 
 
+class DatalessDarcy_solver:
+    def __init__(self, params):
+        pass
+
+
 class DatalessDarcy_nn_Factory:
     def __init__(self, params: DatalessDarcyTrainingParams):
         self.init_FEM_formulation(params)
-        # if torch.cuda.is_available():
-        #     device = torch.device("cuda")
-        # else:
-        #     device = torch.device("cpu")
-        # self.u = (Darcy_nn(input_size=3, hidden_size=64, output_size=1).to(device),)
-        # self.p = (Darcy_nn(input_size=3, hidden_size=64, output_size=1).to(device),)
+        self.init_training_settings(params)
 
-        # self.u_optimizer = torch.optim.Adam(self.u.parameters(), lr=params.learn_rate)
-        # self.p_optimizer = torch.optim.Adam(self.p.parameters(), lr=params.learn_rate)
-        # self.lossfun = nn.MSELoss()
-        # self.A_matrix_params = params.A_matrix_params
-        # self.epochs = params.epochs
-        # self.fit_nets = False
+    def init_FEM_formulation(self, params: DatalessDarcyTrainingParams):
+        self.A_matrix_params = params.A_matrix_params
 
-    def init_FEM_formlation(self, params: DatalessDarcyTrainingParams):
-        self.Mesh = params.Mesh
+        self.mesh = params.mesh
+        self.f = fe.Expression(params.f, degree=params.degree - 1)
+        # Hdiv-L2 conforming FE space.
+        self.model_space = fe.FunctionSpace(
+            self.mesh,
+            fe.FiniteElement("BDM", self.mesh.ufl_cell(), params.degree)
+            * fe.FiniteElement("DG", self.mesh.ufl_cell(), params.degree - 1),
+        )
 
-    # def get_nets(
-    #     self,
-    # ):
-    #     if self.fit:
-    #         return self.sol
+    def init_training_settings(self, params: DatalessDarcyTrainingParams):
+        if torch.cuda.is_available():
+            self.device = torch.device("cuda")
+        else:
+            self.device = torch.device("cpu")
+        self.epochs = params.epochs
+        self.learn_rate = params.learn_rate
+        # input_size = 2 * self.mesh.num_vertices() +1
+        # output_size = 10
+        # hidden_size = 64
 
-    # def fit(self, verbose: bool = False) -> None:
-    #     self.fit = True
-    #     for epoch in range(self.epochs):
-    #         self.sol.u.train()
-    #         self.sol.p.train()
+    def fit(self, verbose: bool = False) -> DatalessDarcy_solver:
+        # The only input is the bias
+        u_net = Darcy_nn(input_size=1)
+        p_net = Darcy_nn(input_size=1)
+        u_optimizer = torch.optim.Adam(u_net.parameters(), lr=self.learn_rate)
+        p_optimizer = torch.optim.Adam(p_net.parameters(), lr=self.learn_rate)
+        physics_loss = Darcy_Energy_Loss()
 
-    #         if verbose:
-    #             print(f"Epoch: {epoch}, Action loss: {loss[0]} ")
+        u_net.train()
+        p_net.train()
+
+        loss = self.one_grad_descent_iter(u_net, p_net, u_optimizer, p_optimizer)
+
+        return DatalessDarcy_solver([])
+
+    def one_grad_descent_iter(self, u, p, u_optimizer, p_optimizer):
+        bias = torch.tensor(1)
+        # Coordinates in the FEM basis self.model_space
+        u_coordinates = np.array(u(bias).item())
+        p_coordinates = np.array(p(bias).item())
+
+        system_state = fe.Function(self.model_space)
+        (u, p) = system_state.split()
+        # We're gonna use numpy to connect Tensors < - > Numpy <-> H div - L2 coordinates (fenics)
+        # u.vector().get_local() = u_coordinates
+        # p
+        return torch.tensor(1)
 
 
 if __name__ == "__main__":
@@ -103,7 +137,7 @@ if __name__ == "__main__":
     exact_solution = [u_expression, p_expression]
     test_params = DatalessDarcyTrainingParams(
         h=h,
-        Mesh=fe.UnitSquareMesh(
+        mesh=fe.UnitSquareMesh(
             round(1 / (h * np.sqrt(2))),
             round(1 / (h * np.sqrt(2))),
         ),
@@ -114,5 +148,6 @@ if __name__ == "__main__":
     )
 
     sol_factory = DatalessDarcy_nn_Factory(test_params)
-    # sol_factory.fit(verbose=True)
+    solver = sol_factory.fit(verbose=True)
+
     # sol = sol_factory.get_nets()
