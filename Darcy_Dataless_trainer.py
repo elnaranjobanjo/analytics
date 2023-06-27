@@ -45,6 +45,26 @@ class Darcy_Energy_Loss(nn.Module):
         return torch.tensor(1)
 
 
+class Test_Loss(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, y):
+        # Save inputs for backward
+        ctx.save_for_backward(x, y)
+        # Compute loss using numpy (or any other library)
+        loss_np = (x.detach().numpy() - np.pi) ** 2 + (
+            y.detach().numpy() - 2 * np.pi
+        ) ** 2
+        return torch.tensor(loss_np, requires_grad=True)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        # Compute gradients
+        x, y = ctx.saved_tensors
+        grad_x = 2 * (x.detach().numpy() - np.pi)
+        grad_y = 2 * (y.detach().numpy() - 2 * np.pi)
+        return torch.tensor(grad_x), torch.tensor(grad_y)
+
+
 @dataclass
 class DatalessDarcyTrainingParams:
     h: float = 0.1
@@ -93,6 +113,7 @@ class DatalessDarcy_nn_Factory:
             self.device = torch.device("cpu")
         self.epochs = params.epochs
         self.learn_rate = params.learn_rate
+        self.loss = Test_Loss.apply
         # input_size = 2 * self.mesh.num_vertices() +1
         # output_size = 10
         # hidden_size = 64
@@ -109,21 +130,45 @@ class DatalessDarcy_nn_Factory:
         p_net.train()
 
         loss = self.one_grad_descent_iter(u_net, p_net, u_optimizer, p_optimizer)
+        for i in range(self.epochs):
+            loss = self.one_grad_descent_iter(u_net, p_net, u_optimizer, p_optimizer)
+            if verbose:
+                print(f"Current_Action = {loss}")
+
+        bias = torch.tensor([1.0])
+        print(f"{u_net(bias).item() = }")
+        print(f"{p_net(bias).item() = }")
 
         return DatalessDarcy_solver([])
 
     def one_grad_descent_iter(self, u, p, u_optimizer, p_optimizer):
-        bias = torch.tensor(1)
+        bias = torch.tensor([1.0])
         # Coordinates in the FEM basis self.model_space
-        u_coordinates = np.array(u(bias).item())
-        p_coordinates = np.array(p(bias).item())
+        # u_coordinates = np.array(u(bias).item())
+        # p_coordinates = np.array(p(bias).item())
+        x = u(bias)  # .detach().numpy()
+        y = p(bias)  # .detach().numpy()
 
-        system_state = fe.Function(self.model_space)
-        (u, p) = system_state.split()
-        # We're gonna use numpy to connect Tensors < - > Numpy <-> H div - L2 coordinates (fenics)
-        # u.vector().get_local() = u_coordinates
-        # p
-        return torch.tensor(1)
+        # system_state = fe.Function(self.model_space)
+        # (u, p) = system_state.split()
+
+        # gradients_array = np.matrix([2 * (x - np.pi), 2 * (y - 2 * np.pi)])
+        # loss = torch.tensor(
+        #     torch.tensor((x - np.pi) ** 2 + (y - 2 * np.pi) ** 2), requires_grad=True
+        # )
+        # gradients = torch.tensor(gradients_array, requires_grad=False)
+
+        # # Perform the backward pass with the manually computed gradients
+        # loss.backward(gradients)
+
+        loss = self.loss(x, y)
+        loss.backward()
+
+        # Use an optimizer to update your parameters
+        u_optimizer.step()
+        p_optimizer.step()
+
+        return loss.item()
 
 
 if __name__ == "__main__":
@@ -138,13 +183,14 @@ if __name__ == "__main__":
     test_params = DatalessDarcyTrainingParams(
         h=h,
         mesh=fe.UnitSquareMesh(
-            round(1 / (h * np.sqrt(2))),
-            round(1 / (h * np.sqrt(2))),
+            round(1.0 / (h * np.sqrt(2.0))),
+            round(1.0 / (h * np.sqrt(2.0))),
         ),
         degree=5,
         f="-10*x[1]*(1-x[1])-10*x[0]*(1-x[0])+2*(1-2*x[0])*(1-2*x[1])",
-        A_matrix_params=get_matrix_params_from(np.array([[5, 1], [1, 5]])),
-        epochs=10,
+        A_matrix_params=get_matrix_params_from(np.array([[5.0, 1.0], [1.0, 5.0]])),
+        epochs=10000,
+        learn_rate=0.00001,
     )
 
     sol_factory = DatalessDarcy_nn_Factory(test_params)
