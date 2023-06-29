@@ -37,12 +37,28 @@ class Darcy_nn(nn.Module):
         return x
 
 
-class Darcy_Energy_Loss(nn.Module):
-    def __init__(self):
-        super().__init__()
+class Darcy_Energy_Loss(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, u_dofs_tsr, p_dofs_tsr):
+        # Save inputs for backward
+        ctx.save_for_backward(u_dofs_tsr, p_dofs_tsr)
+        # Compute loss using numpy (or any other library)
+        u_dofs = u_dofs_tsr.detach().numpy()
+        p_dofs = p_dofs_tsr.detach().numpy() 
 
-    def forward(self, output, target):
-        return torch.tensor(1)
+        # loss_np = (x.detach().numpy() - np.pi) ** 2 + (
+        #    y.detach().numpy() - 2 * np.pi
+        # ) ** 2
+        loss_np = 1
+        return torch.tensor(loss_np, requires_grad=True)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        # Compute gradients
+        x, y = ctx.saved_tensors
+        grad_x = 2 * (x.detach().numpy() - np.pi)
+        grad_y = 2 * (y.detach().numpy() - 2 * np.pi)
+        return torch.tensor(grad_x), torch.tensor(grad_y)
 
 
 class Test_Loss(torch.autograd.Function):
@@ -113,7 +129,8 @@ class DatalessDarcy_nn_Factory:
             self.device = torch.device("cpu")
         self.epochs = params.epochs
         self.learn_rate = params.learn_rate
-        self.loss = Test_Loss.apply
+        # self.loss = Test_Loss.apply
+        self.loss = Darcy_Energy_Loss.apply
         # input_size = 2 * self.mesh.num_vertices() +1
         # output_size = 10
         # hidden_size = 64
@@ -143,25 +160,11 @@ class DatalessDarcy_nn_Factory:
 
     def one_grad_descent_iter(self, u, p, u_optimizer, p_optimizer):
         bias = torch.tensor([1.0])
-        # Coordinates in the FEM basis self.model_space
-        # u_coordinates = np.array(u(bias).item())
-        # p_coordinates = np.array(p(bias).item())
-        x = u(bias)  # .detach().numpy()
-        y = p(bias)  # .detach().numpy()
 
-        # system_state = fe.Function(self.model_space)
-        # (u, p) = system_state.split()
+        u_dofs = u(bias)  # .detach().numpy()
+        p_dofs = p(bias)  # .detach().numpy()
 
-        # gradients_array = np.matrix([2 * (x - np.pi), 2 * (y - 2 * np.pi)])
-        # loss = torch.tensor(
-        #     torch.tensor((x - np.pi) ** 2 + (y - 2 * np.pi) ** 2), requires_grad=True
-        # )
-        # gradients = torch.tensor(gradients_array, requires_grad=False)
-
-        # # Perform the backward pass with the manually computed gradients
-        # loss.backward(gradients)
-
-        loss = self.loss(x, y)
+        loss = self.loss(u_dofs, p_dofs)
         loss.backward()
 
         # Use an optimizer to update your parameters
