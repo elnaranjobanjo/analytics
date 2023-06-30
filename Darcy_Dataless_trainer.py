@@ -36,13 +36,14 @@ class Darcy_nn(nn.Module):
         x = self.fc6(x)
         return x
 
+
 class Darcy_Energy_Loss(nn.Module):
     def __init__(self):
         super(Darcy_Energy_Loss, self).__init__()
 
     def forward(self, u_dofs, p_dofs, a, f):
         w = torch.cat((u_dofs, p_dofs), dim=0)
-        return 0.5 * torch.dot(torch.matmul(a, w), w) + torch.dot(f, w)
+        return 0.5 * torch.dot(torch.matmul(a, w), w) - torch.dot(f, w)
 
 
 class Test_Loss(torch.autograd.Function):
@@ -84,9 +85,25 @@ def get_matrix_params_from(A: np.array) -> list:
     return [eig_vals[0], eig_vals[1], np.arctan2(sin_theta, cos_theta)]
 
 
-class DatalessDarcy_solver:
-    def __init__(self, params):
-        pass
+class DarcyDataless_Solver:
+    def __init__(self, u: Darcy_nn, p: Darcy_nn, model_space: fe.FunctionSpace):
+        self.u = u
+        self.p = p
+        self.model_space = model_space
+
+    def to_fenics(self):
+        bias = torch.tensor([1.0])
+
+
+def get_A_matrix_from(A_matrix_params):
+    eigen_1 = A_matrix_params[0]
+    eigen_2 = A_matrix_params[1]
+    theta = A_matrix_params[2]
+    return (
+        np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
+        * np.array([[eigen_1, 0], [0, eigen_2]])
+        * np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+    )
 
 
 class DatalessDarcy_nn_Factory:
@@ -105,9 +122,33 @@ class DatalessDarcy_nn_Factory:
             fe.FiniteElement("BDM", self.mesh.ufl_cell(), params.degree)
             * fe.FiniteElement("DG", self.mesh.ufl_cell(), params.degree - 1),
         )
+        # Define the matrix Ainv (numpy array)
+        A = get_A_matrix_from(self.A_matrix_params)
+        Ainv = np.linalg.inv(
+            A
+        )  # A is a numpy array representing the coefficient matrix A
 
-        self.a = torch.from_numpy(np.matrix([[2, 0], [0, 2]], dtype=np.float32))
-        self.f = torch.from_numpy(np.matrix([3, 50], dtype=np.float32)).squeeze()
+        # Define the trial and test functions
+        (u, p) = fe.TrialFunctions(self.model_space)
+        (v, q) = fe.TestFunctions(self.model_space)
+
+        # Build the left-hand side matrix a
+        lhs_matrix = fe.dot(fe.Constant(Ainv) * u, v) + fe.div(v) * p + fe.div(u) * q
+        a = lhs_matrix * fe.dx
+
+        # Build the right-hand side vector L
+        L = self.f * q * fe.dx
+
+        # Convert the FEniCS expressions to numpy arrays
+        a_np = fe.assemble(a).array()
+        L_np = fe.assemble(L).get_local()
+
+        # Convert the numpy arrays to PyTorch tensors
+        self.a = torch.from_numpy(a_np).float()
+        self.f = torch.from_numpy(L_np).float()
+
+        # self.a = torch.from_numpy(np.matrix([[2, 0], [0, 2]], dtype=np.float32))
+        # self.f = torch.from_numpy(np.matrix([3, 50], dtype=np.float32)).squeeze()
 
     def init_training_settings(self, params: DatalessDarcyTrainingParams):
         if torch.cuda.is_available():
@@ -116,16 +157,23 @@ class DatalessDarcy_nn_Factory:
             self.device = torch.device("cpu")
         self.epochs = params.epochs
         self.learn_rate = params.learn_rate
-        # self.loss = Test_Loss.apply
         self.loss = Darcy_Energy_Loss()
-        # input_size = 2 * self.mesh.num_vertices() +1
-        # output_size = 10
-        # hidden_size = 64
+        self.input_size = 1
+        self.u_output_size = self.model_space.sub(0).dim()
+        self.p_output_size = self.model_space.sub(1).dim()
 
-    def fit(self, verbose: bool = False) -> DatalessDarcy_solver:
+    def fit(self, verbose: bool = False) -> DarcyDataless_Solver:
         # The only input is the bias
-        u_net = Darcy_nn(input_size=1)
-        p_net = Darcy_nn(input_size=1)
+        u_net = Darcy_nn(
+            input_size=self.input_size,
+            # hidden_size=self.u_output_size,
+            output_size=self.u_output_size,
+        )
+        p_net = Darcy_nn(
+            input_size=self.input_size,
+            # hidden_size=self.p_output_size,
+            output_size=self.p_output_size,
+        )
         u_optimizer = torch.optim.Adam(u_net.parameters(), lr=self.learn_rate)
         p_optimizer = torch.optim.Adam(p_net.parameters(), lr=self.learn_rate)
 
@@ -138,10 +186,8 @@ class DatalessDarcy_nn_Factory:
                 print(f"Current_Action = {loss}")
 
         bias = torch.tensor([1.0])
-        print(f"{u_net(bias).item() = }")
-        print(f"{p_net(bias).item() = }")
 
-        return DatalessDarcy_solver([])
+        return DarcyDataless_Solver(u_net, p_net, self.model_space)
 
     def one_grad_descent_iter(self, u, p, u_optimizer, p_optimizer):
         bias = torch.tensor([1.0])
@@ -173,11 +219,29 @@ if __name__ == "__main__":
         degree=5,
         f="-10*x[1]*(1-x[1])-10*x[0]*(1-x[0])+2*(1-2*x[0])*(1-2*x[1])",
         A_matrix_params=get_matrix_params_from(np.array([[5.0, 1.0], [1.0, 5.0]])),
-        epochs=10000,
-        learn_rate=0.00001,
+        epochs=1000,
+        learn_rate=0.01,
     )
 
     sol_factory = DatalessDarcy_nn_Factory(test_params)
     solver = sol_factory.fit(verbose=True)
+    (u, p) = fe.Function(sol_factory.model_space).split()
+
+    (u_exact, p_exact) = fe.interpolate(
+        fe.Expression(
+            (u_expression[0], u_expression[1], p_expression), degree=test_params.degree
+        ),
+        sol_factory.model_space,
+    ).split()
+
+    dx = fe.dx(domain=sol_factory.mesh)
+    u_err = np.sqrt(
+        fe.assemble(((u[0] - u_exact[0]) ** 2 + (u[1] - u_exact[1]) ** 2) * dx)
+    )
+
+    p_err = np.sqrt(fe.assemble((p - p_exact) ** 2 * dx))
+
+    print(f"{u_err = }")
+    print(f"{p_err = }")
 
     # sol = sol_factory.get_nets()

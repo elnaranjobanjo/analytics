@@ -86,7 +86,7 @@ class Darcy_Solver:
 
         a = (
             fe.dot(
-                fe.Constant(((Ainv[0, 0], Ainv[0, 1]), (Ainv[1, 0], Ainv[1, 1]))) * u,
+                fe.Constant(Ainv) * u,
                 v,
             )
             + fe.div(v) * p
