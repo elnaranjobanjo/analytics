@@ -36,29 +36,13 @@ class Darcy_nn(nn.Module):
         x = self.fc6(x)
         return x
 
+class Darcy_Energy_Loss(nn.Module):
+    def __init__(self):
+        super(Darcy_Energy_Loss, self).__init__()
 
-class Darcy_Energy_Loss(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, u_dofs_tsr, p_dofs_tsr):
-        # Save inputs for backward
-        ctx.save_for_backward(u_dofs_tsr, p_dofs_tsr)
-        # Compute loss using numpy (or any other library)
-        u_dofs = u_dofs_tsr.detach().numpy()
-        p_dofs = p_dofs_tsr.detach().numpy() 
-
-        # loss_np = (x.detach().numpy() - np.pi) ** 2 + (
-        #    y.detach().numpy() - 2 * np.pi
-        # ) ** 2
-        loss_np = 1
-        return torch.tensor(loss_np, requires_grad=True)
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        # Compute gradients
-        x, y = ctx.saved_tensors
-        grad_x = 2 * (x.detach().numpy() - np.pi)
-        grad_y = 2 * (y.detach().numpy() - 2 * np.pi)
-        return torch.tensor(grad_x), torch.tensor(grad_y)
+    def forward(self, u_dofs, p_dofs, a, f):
+        w = torch.cat((u_dofs, p_dofs), dim=0)
+        return 0.5 * torch.dot(torch.matmul(a, w), w) + torch.dot(f, w)
 
 
 class Test_Loss(torch.autograd.Function):
@@ -122,6 +106,9 @@ class DatalessDarcy_nn_Factory:
             * fe.FiniteElement("DG", self.mesh.ufl_cell(), params.degree - 1),
         )
 
+        self.a = torch.from_numpy(np.matrix([[2, 0], [0, 2]], dtype=np.float32))
+        self.f = torch.from_numpy(np.matrix([3, 50], dtype=np.float32)).squeeze()
+
     def init_training_settings(self, params: DatalessDarcyTrainingParams):
         if torch.cuda.is_available():
             self.device = torch.device("cuda")
@@ -130,7 +117,7 @@ class DatalessDarcy_nn_Factory:
         self.epochs = params.epochs
         self.learn_rate = params.learn_rate
         # self.loss = Test_Loss.apply
-        self.loss = Darcy_Energy_Loss.apply
+        self.loss = Darcy_Energy_Loss()
         # input_size = 2 * self.mesh.num_vertices() +1
         # output_size = 10
         # hidden_size = 64
@@ -141,12 +128,10 @@ class DatalessDarcy_nn_Factory:
         p_net = Darcy_nn(input_size=1)
         u_optimizer = torch.optim.Adam(u_net.parameters(), lr=self.learn_rate)
         p_optimizer = torch.optim.Adam(p_net.parameters(), lr=self.learn_rate)
-        physics_loss = Darcy_Energy_Loss()
 
         u_net.train()
         p_net.train()
 
-        loss = self.one_grad_descent_iter(u_net, p_net, u_optimizer, p_optimizer)
         for i in range(self.epochs):
             loss = self.one_grad_descent_iter(u_net, p_net, u_optimizer, p_optimizer)
             if verbose:
@@ -161,13 +146,9 @@ class DatalessDarcy_nn_Factory:
     def one_grad_descent_iter(self, u, p, u_optimizer, p_optimizer):
         bias = torch.tensor([1.0])
 
-        u_dofs = u(bias)  # .detach().numpy()
-        p_dofs = p(bias)  # .detach().numpy()
-
-        loss = self.loss(u_dofs, p_dofs)
+        loss = self.loss(u(bias), p(bias), self.a, self.f)
         loss.backward()
 
-        # Use an optimizer to update your parameters
         u_optimizer.step()
         p_optimizer.step()
 
