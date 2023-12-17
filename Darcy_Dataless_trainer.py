@@ -37,13 +37,24 @@ class Darcy_nn(nn.Module):
         return x
 
 
+# This is just plain wrong
+# class primal_Darcy_Energy_Loss(nn.Module):
+#     def __init__(self):
+#         super(Darcy_Energy_Loss, self).__init__()
+
+#     def forward(self, u_dofs, p_dofs, a, f):
+#         w = torch.cat((u_dofs, p_dofs), dim=0)
+#         return 0.5 * torch.dot(torch.matmul(a, w), w) - torch.dot(f, w)
+
+
 class Darcy_Energy_Loss(nn.Module):
     def __init__(self):
         super(Darcy_Energy_Loss, self).__init__()
+        self.lossfun = nn.MSELoss()
 
     def forward(self, u_dofs, p_dofs, a, f):
         w = torch.cat((u_dofs, p_dofs), dim=0)
-        return 0.5 * torch.dot(torch.matmul(a, w), w) - torch.dot(f, w)
+        return self.lossfun(torch.matmul(a, w), f)
 
 
 class Test_Loss(torch.autograd.Function):
@@ -91,8 +102,16 @@ class DarcyDataless_Solver:
         self.p = p
         self.model_space = model_space
 
-    def to_fenics(self):
+    def to_fenics(self):  # -> pair(fe.Function, fe.Function):
         bias = torch.tensor([1.0])
+        u_dofs = self.u.forward(bias).detach().numpy()
+        p_dofs = self.p.forward(bias).detach().numpy()
+
+        (u, p) = fe.Function(sol_factory.model_space).split()
+
+        u.vector().set_local(u_dofs)
+        p.vector().set_local(p_dofs)
+        return (u, p)
 
 
 def get_A_matrix_from(A_matrix_params):
@@ -183,7 +202,7 @@ class DatalessDarcy_nn_Factory:
         for i in range(self.epochs):
             loss = self.one_grad_descent_iter(u_net, p_net, u_optimizer, p_optimizer)
             if verbose:
-                print(f"Current_Action = {loss}")
+                print(f"Current loss = {loss}")
 
         bias = torch.tensor([1.0])
 
@@ -219,13 +238,14 @@ if __name__ == "__main__":
         degree=5,
         f="-10*x[1]*(1-x[1])-10*x[0]*(1-x[0])+2*(1-2*x[0])*(1-2*x[1])",
         A_matrix_params=get_matrix_params_from(np.array([[5.0, 1.0], [1.0, 5.0]])),
-        epochs=1000,
-        learn_rate=0.01,
+        epochs=11000,
+        learn_rate=0.000001,
     )
 
     sol_factory = DatalessDarcy_nn_Factory(test_params)
     solver = sol_factory.fit(verbose=True)
-    (u, p) = fe.Function(sol_factory.model_space).split()
+
+    (u, p) = solver.to_fenics()
 
     (u_exact, p_exact) = fe.interpolate(
         fe.Expression(
@@ -238,10 +258,7 @@ if __name__ == "__main__":
     u_err = np.sqrt(
         fe.assemble(((u[0] - u_exact[0]) ** 2 + (u[1] - u_exact[1]) ** 2) * dx)
     )
-
     p_err = np.sqrt(fe.assemble((p - p_exact) ** 2 * dx))
 
     print(f"{u_err = }")
     print(f"{p_err = }")
-
-    # sol = sol_factory.get_nets()
