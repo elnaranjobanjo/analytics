@@ -92,7 +92,7 @@ class DarcyDataless_Solver:
         self.p = p
         self.model_space = model_space
 
-    def to_fenics(self):  # -> pair(fe.Function, fe.Function):
+    def to_fenics(self) -> tuple(fe.Function, fe.Function):
         bias = torch.tensor([1.0])
         u_dofs = self.u.forward(bias).detach().numpy()
         p_dofs = self.p.forward(bias).detach().numpy()
@@ -156,9 +156,6 @@ class DatalessDarcy_nn_Factory:
         self.a = torch.from_numpy(a_np).float()
         self.f = torch.from_numpy(L_np).float()
 
-        # self.a = torch.from_numpy(np.matrix([[2, 0], [0, 2]], dtype=np.float32))
-        # self.f = torch.from_numpy(np.matrix([3, 50], dtype=np.float32)).squeeze()
-
     def init_training_settings(self, params: DatalessDarcyTrainingParams):
         if torch.cuda.is_available():
             self.device = torch.device("cuda")
@@ -193,8 +190,6 @@ class DatalessDarcy_nn_Factory:
             loss = self.one_grad_descent_iter(u_net, p_net, u_optimizer, p_optimizer)
             if verbose:
                 print(f"Current loss = {loss}")
-
-        bias = torch.tensor([1.0])
 
         return DarcyDataless_Solver(u_net, p_net, self.model_space)
 
