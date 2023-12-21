@@ -1,7 +1,8 @@
-from Generators_Darcy import Darcy_Solver, DarcySimParams, generate_data_using_eig_rep
 import matplotlib.pyplot as plt
 import fenics as fe
 import numpy as np
+
+import Darcy_generator as Dg
 
 
 def test_convergence():
@@ -14,8 +15,7 @@ def test_convergence():
     p_expression = "x[0]*x[1]*(1-x[0])*(1-x[1])"
     for h in hs:
         print(f"{h = }")
-        test_params = DarcySimParams(
-            h=h,
+        test_params = Dg.DarcySimParams(
             mesh=fe.UnitSquareMesh(
                 round(1 / (h * np.sqrt(2))),
                 round(1 / (h * np.sqrt(2))),
@@ -24,9 +24,9 @@ def test_convergence():
             f="-10*x[1]*(1-x[1])-10*x[0]*(1-x[0])+2*(1-2*x[0])*(1-2*x[1])",
         )
         A = np.array([[5, 1], [1, 5]])
-        generator = Darcy_Solver(test_params)
+        generator = Dg.Darcy_FEM_Solver(test_params)
 
-        print(f"{generator.mesh.num_cells() = }")
+        print(f"{generator.model_space.mesh().num_cells() = }")
 
         (u, p) = generator.solve_variational_form(A).split()
         print(f"{len(u.vector().get_local()) = }")
@@ -43,7 +43,7 @@ def test_convergence():
         ).split()
 
         fe.set_log_level(50)
-        dx = fe.dx(domain=generator.mesh)
+        dx = fe.dx(domain=generator.model_space.mesh())
         u_err = np.sqrt(
             fe.assemble(((u[0] - u_exact[0]) ** 2 + (u[1] - u_exact[1]) ** 2) * dx)
         )
@@ -69,16 +69,17 @@ def test_convergence():
 
 
 if __name__ == "__main__":
-    h = 0.1
-    test_params = DarcySimParams(
-        h=h,
-        mesh=fe.UnitSquareMesh(
-            round(1 / (h * np.sqrt(2))),
-            round(1 / (h * np.sqrt(2))),
-        ),
-        degree=6,
-        f="10",
-    )
-    eigen_range = [5, 15]
-    N = 10
-    generate_data_using_eig_rep(test_params, eigen_range, N, "test_data")
+    test_convergence()
+    # h = 0.1
+    # test_params = Dg.DarcySimParams(
+    #     h=h,
+    #     mesh=fe.UnitSquareMesh(
+    #         round(1 / (h * np.sqrt(2))),
+    #         round(1 / (h * np.sqrt(2))),
+    #     ),
+    #     degree=6,
+    #     f="10",
+    # )
+    # eigen_range = [5, 15]
+    # N = 10
+    # Dg.generate_data_using_eig_rep(test_params, eigen_range, N, "test_data")
