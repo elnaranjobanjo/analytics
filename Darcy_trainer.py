@@ -74,14 +74,6 @@ class Darcy_PDE_Loss(nn.Module):
         )
 
     def assemble_system(self, A_matrix_params: list):
-        # Ainv = np.linalg.inv(Dg.get_A_matrix_from(A_matrix_params))
-
-        # Define the trial and test functions
-        # (u, p) = fe.TrialFunctions(self.model_space)
-        # (v, q) = fe.TestFunctions(self.model_space)
-
-        # lhs_matrix = fe.dot(fe.Constant(Ainv) * u, v) + fe.div(v) * p + fe.div(u) * q
-        # a_np = fe.assemble(lhs_matrix * fe.dx).array()
         return torch.from_numpy(
             fe.assemble(
                 Dg.define_linear_system(
@@ -203,7 +195,7 @@ class Darcy_nn_Factory:
         batch_size: int,
         output_dir: str,
         verbose: bool = False,
-    ) -> Darcy_Solver:
+    ) -> Darcy_nn_Solver:
         if torch.cuda.is_available():
             device = torch.device("cuda")
         else:
@@ -228,6 +220,9 @@ class Darcy_nn_Factory:
             validation_set = TensorDataset(torch.tensor(validation_data[0]))
         else:
             training_set = TensorDataset(
+                torch.tensor(training_data[0]), torch.tensor(training_data[1])
+            )
+            validation_set = TensorDataset(
                 torch.tensor(training_data[0]), torch.tensor(training_data[1])
             )
         training_loader = DataLoader(
@@ -261,7 +256,7 @@ class Darcy_nn_Factory:
         out_csv = pd.DataFrame(losses, columns=["training", "validation"])
         out_csv.to_csv(os.path.join(output_dir, "loss.csv"), index=False)
 
-        return Darcy_Solver().init_from_nets(u_net, p_net, self.PDE_loss.model_space)
+        return Darcy_nn_Solver().init_from_nets(u_net, p_net, self.PDE_loss.model_space)
 
     def one_grad_descent_iter(
         self, training_loader, validation_loader, u_net, p_net, u_optimizer, p_optimizer

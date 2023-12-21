@@ -1,7 +1,5 @@
-from typing import Tuple
 import fenics as fe
 import numpy as np
-import pandas as pd
 from dataclasses import dataclass
 
 
@@ -113,18 +111,3 @@ def get_A_matrix_from(A_matrix_params: list):
         * np.array([[eigen_1, 0], [0, eigen_2]])
         * np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
     )
-
-
-def generate_data_using_eig_rep(
-    params: DarcySimParams, generated_A_matrix_params: list
-) -> None:
-    solver = Darcy_FEM_Solver(params)
-
-    velocities_pressures = list(
-        map(
-            lambda x: solver.compute_solution_eig_rep(x),
-            generated_A_matrix_params,
-        )
-    )
-
-    return velocities_pressures

@@ -43,7 +43,15 @@ def do_train(params: Dt.DarcyTrainingParams, output_dir: str, verbose=False):
         sim_params = Dg.DarcySimParams(
             mesh=params.mesh, degree=params.degree, f=params.f
         )
-        Y = Dg.generate_data_using_eig_rep(sim_params, generated_A_matrix_params)
+        FEM_solver = Dg.Darcy_FEM_Solver(sim_params)
+        Y = list(
+            map(
+                lambda x: FEM_solver.compute_solution_eig_rep(x),
+                generated_A_matrix_params,
+            )
+        )
+
+        print(f"{len(Y) = }")
         Y_train, Y_val = (
             Y[split_index:],
             Y[:split_index],
@@ -51,8 +59,14 @@ def do_train(params: Dt.DarcyTrainingParams, output_dir: str, verbose=False):
         training_data = [X_train, Y_train]
         validation_data = [X_val, Y_val]
 
-        Y_train_csv = pd.DataFrame(Y_train)
-        Y_val_csv = pd.DataFrame(Y_val)
+        num_u_dofs = FEM_solver.model_space.sub(0).dim()
+        num_p_dofs = FEM_solver.model_space.sub(1).dim()
+        column_labels = [f"u_{i}" for i in range(num_u_dofs)] + [
+            f"p_{i}" for i in range(num_p_dofs)
+        ]
+
+        Y_train_csv = pd.DataFrame(Y_train, columns=column_labels)
+        Y_val_csv = pd.DataFrame(Y_val, columns=column_labels)
 
         train_csv = pd.concat([train_csv, Y_train_csv], axis=1)
         val_csv = pd.concat([val_csv, Y_val_csv], axis=1)

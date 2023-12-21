@@ -16,7 +16,7 @@ if __name__ == "__main__":
         os.path.dirname(args.path_to_json), json_file["output_dir"]
     )
 
-    solver = ng.do_train(
+    nn_solver = ng.do_train(
         ng.make_DarcyTrainingParams_dataclass(json_file["training_params"]),
         output_dir,
         verbose=True,
