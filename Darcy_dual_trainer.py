@@ -11,7 +11,7 @@ import os
 import pandas as pd
 from dataclasses import dataclass, field
 
-import Darcy_generator as Dg
+import Darcy_dual_generator as Ddg
 import engine as ng
 
 # Given a triplet [eig_1,eig_2,theta] the factory class
@@ -58,10 +58,10 @@ class Darcy_PDE_Loss(nn.Module):
     def __init__(self, params: DarcyPDELossParams):
         super(Darcy_PDE_Loss, self).__init__()
         self.lossfun = nn.MSELoss()
-        self.model_space = Dg.make_Darcy_model_space(params.mesh, params.degree)
+        self.model_space = Ddg.make_Darcy_model_space(params.mesh, params.degree)
 
         # Build the right-hand side vector L
-        L = Dg.define_rhs(self.model_space, params.degree, params.f)
+        L = Ddg.define_rhs(self.model_space, params.degree, params.f)
         L_np = fe.assemble(L).get_local()
         self.f = torch.from_numpy(L_np)
 
@@ -79,8 +79,8 @@ class Darcy_PDE_Loss(nn.Module):
     def assemble_system(self, A_matrix_params: list):
         return torch.from_numpy(
             fe.assemble(
-                Dg.define_linear_system(
-                    Dg.get_A_matrix_from(A_matrix_params), self.model_space
+                Ddg.define_linear_system(
+                    Ddg.get_A_matrix_from(A_matrix_params), self.model_space
                 )
             ).array()
         )

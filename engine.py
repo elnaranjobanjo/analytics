@@ -7,11 +7,11 @@ import pandas as pd
 import random
 import time
 
-import Darcy_trainer as Dt
-import Darcy_generator as Dg
+import Darcy_dual_trainer as Ddt
+import Darcy_dual_generator as Ddg
 
 
-def print_Darcy_training_params(params: Dt.DarcyTrainingParams) -> None:
+def print_Darcy_training_params(params: Ddt.DarcyTrainingParams) -> None:
     print(f"degree = {params.degree}")
     print(f"f = {params.f}")
     print(f"A matrix params = {params.A_matrix_params}")
@@ -26,7 +26,7 @@ def print_Darcy_training_params(params: Dt.DarcyTrainingParams) -> None:
     print(f"batch size = {params.batch_size}\n")
 
 
-def do_train(params: Dt.DarcyTrainingParams, output_dir: str, verbose=False):
+def do_train(params: Ddt.DarcyTrainingParams, output_dir: str, verbose=False):
     print("training Darcy nets begins with the following parameters\n")
     print_Darcy_training_params(params)
     if not os.path.exists(output_dir):
@@ -62,15 +62,17 @@ def do_train(params: Dt.DarcyTrainingParams, output_dir: str, verbose=False):
         with open(os.path.join(output_dir, "log.txt"), "a") as file:
             file.write(f"Generating training data")
 
-        sim_params = Dg.DarcySimParams(
+        sim_params = Ddg.DarcySimParams(
             mesh=params.mesh, degree=params.degree, f=params.f
         )
-        FEM_solver = Dg.Darcy_FEM_Solver(sim_params)
+        FEM_solver = Ddg.Darcy_FEM_Solver(sim_params)
         time_1 = time.time()
-        Y = list(
-            map(
-                lambda x: FEM_solver.compute_solution_eig_rep(x),
-                generated_A_matrix_params,
+        Y = np.array(
+            list(
+                map(
+                    lambda x: FEM_solver.compute_solution_eig_rep(x),
+                    generated_A_matrix_params,
+                )
             )
         )
         time_2 = time.time()
@@ -100,7 +102,7 @@ def do_train(params: Dt.DarcyTrainingParams, output_dir: str, verbose=False):
     train_csv.to_csv(os.path.join(output_dir, "train.csv"), index=False)
     val_csv.to_csv(os.path.join(output_dir, "val.csv"), index=False)
 
-    factory_params = Dt.DarcynnFactoryParams(
+    factory_params = Ddt.DarcynnFactoryParams(
         mesh=params.mesh,
         degree=params.degree,
         f=params.f,
@@ -109,7 +111,7 @@ def do_train(params: Dt.DarcyTrainingParams, output_dir: str, verbose=False):
         dataless=params.dataless,
     )
 
-    nn_solver = Dt.Darcy_nn_Factory(factory_params).fit(
+    nn_solver = Ddt.Darcy_nn_Factory(factory_params).fit(
         training_data, validation_data, params.batch_size, output_dir, verbose=verbose
     )
     nn_solver.save(os.path.join(output_dir, "nets"))
@@ -129,8 +131,8 @@ def make_loss_plots(output_dir: str) -> None:
         plt.close()
 
 
-def make_DarcyTrainingParams_dataclass(params_dict: dict) -> Dt.DarcyTrainingParams:
-    params = Dt.DarcyTrainingParams()
+def make_DarcyTrainingParams_dataclass(params_dict: dict) -> Ddt.DarcyTrainingParams:
+    params = Ddt.DarcyTrainingParams()
     for key, value in params_dict.items():
         if key == "mesh":
             params.mesh = fe.Mesh(value)
