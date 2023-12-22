@@ -1,14 +1,17 @@
 import fenics as fe
-import json
 import numpy as np
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import random
+import sys
 import time
 
-import Darcy_dual_trainer as Ddt
+sys.path.append("./src/generators/")
+sys.path.append("./src/trainers/")
+
 import Darcy_dual_generator as Ddg
+import Darcy_dual_trainer as Ddt
 
 
 def print_Darcy_training_params(params: Ddt.DarcyTrainingParams) -> None:

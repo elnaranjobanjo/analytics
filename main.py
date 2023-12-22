@@ -1,8 +1,10 @@
 import argparse
 import json
 import os
+import sys
 import torch
 
+sys.path.append("./src/")
 import engine as ng
 
 
