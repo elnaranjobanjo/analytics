@@ -37,11 +37,14 @@ class PDE_formulation:
     def initialize_function(self) -> fe.Function:
         return fe.Function(self.model_space)
 
-    def get_mesh(self):
+    def get_mesh(self) -> fe.Mesh:
         return self.model_space.mesh()
 
-    def get_model_space(self):
+    def get_model_space(self) -> fe.FunctionSpace:
         return self.model_space
+
+    def get_source_Lnp(self) -> np.array:
+        return fe.assemble(self.L).get_local()
 
 
 # Encodes the variational formulation for:
@@ -84,6 +87,11 @@ class Darcy_dual_formulation(PDE_formulation):
 
     def define_rhs(self) -> fe.Function:
         return fe.Expression(self.f, degree=self.degree - 1) * self.q * fe.dx
+
+    def assemble_linear_system(self, A_matrix_params: list) -> np.array:
+        return fe.assemble(
+            self.define_linear_system(get_A_matrix_from(A_matrix_params))
+        ).array()
 
     def solve(self, A: np.array) -> fe.Function:
         sol = self.initialize_function()
