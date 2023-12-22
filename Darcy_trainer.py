@@ -63,14 +63,17 @@ class Darcy_PDE_Loss(nn.Module):
         # Build the right-hand side vector L
         L = Dg.define_rhs(self.model_space, params.degree, params.f)
         L_np = fe.assemble(L).get_local()
-        self.f = torch.from_numpy(L_np).float()
+        self.f = torch.from_numpy(L_np)
 
     def forward(
         self, u_dofs: torch.tensor, p_dofs: torch.tensor, A_matrix_params: list
     ):
-        w = torch.cat((u_dofs, p_dofs), dim=0)
         return self.lossfun(
-            torch.matmul(self.assemble_system(A_matrix_params), w), self.f
+            torch.matmul(
+                self.assemble_system(A_matrix_params),
+                torch.cat((u_dofs, p_dofs), dim=0),
+            ),
+            self.f,
         )
 
     def assemble_system(self, A_matrix_params: list):
@@ -80,7 +83,7 @@ class Darcy_PDE_Loss(nn.Module):
                     Dg.get_A_matrix_from(A_matrix_params), self.model_space
                 )
             ).array()
-        ).float()
+        )
 
 
 class Darcy_nn_Solver:
@@ -157,7 +160,6 @@ class Darcy_nn_Solver:
 
 @dataclass
 class DarcynnFactoryParams:
-    h: float = 0.1
     mesh: fe.Mesh = fe.UnitSquareMesh(10, 10)
     degree: int = 1
     f: str = "10"
@@ -169,7 +171,6 @@ class DarcynnFactoryParams:
 class Darcy_nn_Factory:
     def __init__(self, params: DarcynnFactoryParams):
         PDE_loss_params = DarcyPDELossParams(
-            h=params.h,
             mesh=params.mesh,
             degree=params.degree,
             f=params.f,
@@ -186,7 +187,7 @@ class Darcy_nn_Factory:
         self.p_hidden_size = int((2 / 3) * (self.input_size + self.p_output_size))
         self.dataless = params.dataless
         if not self.dataless:
-            pass
+            self.Data_loss = nn.MSELoss()
 
     def fit(
         self,
@@ -223,7 +224,7 @@ class Darcy_nn_Factory:
                 torch.tensor(training_data[0]), torch.tensor(training_data[1])
             )
             validation_set = TensorDataset(
-                torch.tensor(training_data[0]), torch.tensor(training_data[1])
+                torch.tensor(validation_data[0]), torch.tensor(validation_data[1])
             )
         training_loader = DataLoader(
             dataset=training_set, batch_size=batch_size, shuffle=False
@@ -252,28 +253,53 @@ class Darcy_nn_Factory:
                 print(f"epoch = {i+1}")
                 print(f"training loss = {training_loss}")
                 print(f"validation loss = {validation_loss}\n")
-
-        out_csv = pd.DataFrame(losses, columns=["training", "validation"])
-        out_csv.to_csv(os.path.join(output_dir, "loss.csv"), index=False)
+        if self.dataless:
+            out_csv = pd.DataFrame(
+                [[l[0][0], l[1][0]] for l in losses], columns=["training", "validation"]
+            )
+            out_csv.to_csv(os.path.join(output_dir, "loss.csv"), index=False)
+        else:
+            out_csv = pd.DataFrame(
+                [
+                    [l[0][0], l[0][1], l[0][2], l[1][0], l[1][1], l[1][2]]
+                    for l in losses
+                ],
+                columns=[
+                    "total_training",
+                    "PDE_training_loss",
+                    "Data_training_loss",
+                    "total_validation",
+                    "PDE_validation_loss",
+                    "Data_validation_loss",
+                ],
+            )
+            out_csv.to_csv(os.path.join(output_dir, "loss.csv"), index=False)
 
         return Darcy_nn_Solver().init_from_nets(u_net, p_net, self.PDE_loss.model_space)
 
     def one_grad_descent_iter(
         self, training_loader, validation_loader, u_net, p_net, u_optimizer, p_optimizer
     ):
-        training_loss = []
-        validation_loss = []
+        training_loss = [[], [], []]
+        validation_loss = [[], [], []]
+
         u_net.train()
         p_net.train()
-
         for batch in training_loader:
             if self.dataless:
                 x_batch = batch[0]
-                total_loss = self.calculate_PDE_loss(u_net, p_net, x_batch)
-                training_loss.append(total_loss.item())
+                total_loss = 0
+                training_loss[2].append(0)
             else:
                 x_batch, y_batch = batch
-                total_loss = self.calculate_PDE_loss(u_net, p_net, x_batch)
+                Data_loss = self.calculate_Data_loss(u_net, p_net, x_batch, y_batch)
+                total_loss = Data_loss
+                training_loss[2].append(Data_loss.item())
+
+            PDE_loss = self.calculate_PDE_loss(u_net, p_net, x_batch)
+            total_loss = total_loss + PDE_loss
+            training_loss[1].append(PDE_loss.item())
+            training_loss[0].append(total_loss.item())
 
             total_loss.backward()
             u_optimizer.step()
@@ -282,15 +308,22 @@ class Darcy_nn_Factory:
         for batch in validation_loader:
             if self.dataless:
                 x_batch = batch[0]
-                total_loss = self.calculate_PDE_loss(u_net, p_net, x_batch)
-                validation_loss.append(total_loss.item())
+                total_val_loss = 0
+                validation_loss[2].append(0)
             else:
                 x_batch, y_batch = batch
-                total_loss = self.calculate_PDE_loss(u_net, p_net, x_batch)
+                Data_loss = self.calculate_Data_loss(u_net, p_net, x_batch, y_batch)
+                total_val_loss = Data_loss
+                validation_loss[2].append(Data_loss.item())
 
-        return np.array(training_loss).mean(axis=0), np.array(validation_loss).mean(
-            axis=0
-        )
+            PDE_loss = self.calculate_PDE_loss(u_net, p_net, x_batch)
+            total_val_loss = total_val_loss + PDE_loss
+            validation_loss[1].append(PDE_loss.item())
+            validation_loss[0].append(total_val_loss.item())
+
+        return [np.array(loss).mean(axis=0) for loss in training_loss], [
+            np.array(loss).mean(axis=0) for loss in validation_loss
+        ]
 
     def calculate_PDE_loss(self, u_net, p_net, x_batch):
         loss = 0
@@ -298,6 +331,17 @@ class Darcy_nn_Factory:
             bias_term = torch.tensor([1], dtype=x.dtype)
             x_with_bias = torch.cat((bias_term, x), dim=0)
             loss += self.PDE_loss(u_net(x_with_bias), p_net(x_with_bias), x)
+
+        return loss / len(x_batch)
+
+    def calculate_Data_loss(self, u_net, p_net, x_batch, y_batch):
+        loss = 0
+        for x, y in zip(x_batch, y_batch):
+            bias_term = torch.tensor([1], dtype=x.dtype)
+            x_with_bias = torch.cat((bias_term, x), dim=0)
+            loss += self.Data_loss(
+                torch.cat((u_net(x_with_bias), p_net(x_with_bias)), dim=0), y
+            )
 
         return loss / len(x_batch)
 

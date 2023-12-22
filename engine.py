@@ -5,12 +5,30 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import random
+import time
 
 import Darcy_trainer as Dt
 import Darcy_generator as Dg
 
 
+def print_Darcy_training_params(params: Dt.DarcyTrainingParams) -> None:
+    print(f"degree = {params.degree}")
+    print(f"f = {params.f}")
+    print(f"A matrix params = {params.A_matrix_params}")
+    print(f"epochs = {params.epochs}")
+    print(f"learn rate = {params.learn_rate}")
+    if params.dataless:
+        print("dataless = True")
+    else:
+        print("dataless = False")
+    print(f"number of data points = {params.number_of_data_points}")
+    print(f"percentage set for validation = {params.percentage_for_validation}")
+    print(f"batch size = {params.batch_size}\n")
+
+
 def do_train(params: Dt.DarcyTrainingParams, output_dir: str, verbose=False):
+    print("training Darcy nets begins with the following parameters\n")
+    print_Darcy_training_params(params)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -40,18 +58,26 @@ def do_train(params: Dt.DarcyTrainingParams, output_dir: str, verbose=False):
         validation_data = [X_val]
 
     else:
+        print("Generating Training Data")
+        with open(os.path.join(output_dir, "log.txt"), "a") as file:
+            file.write(f"Generating training data")
+
         sim_params = Dg.DarcySimParams(
             mesh=params.mesh, degree=params.degree, f=params.f
         )
         FEM_solver = Dg.Darcy_FEM_Solver(sim_params)
+        time_1 = time.time()
         Y = list(
             map(
                 lambda x: FEM_solver.compute_solution_eig_rep(x),
                 generated_A_matrix_params,
             )
         )
-
-        print(f"{len(Y) = }")
+        time_2 = time.time()
+        with open(os.path.join(output_dir, "log.txt"), "a") as file:
+            file.write(
+                f"finished! it took {time_2-time_1} seconds or {(time_2-time_1)/3600}"
+            )
         Y_train, Y_val = (
             Y[split_index:],
             Y[:split_index],
@@ -80,43 +106,27 @@ def do_train(params: Dt.DarcyTrainingParams, output_dir: str, verbose=False):
         f=params.f,
         epochs=params.epochs,
         learn_rate=params.learn_rate,
+        dataless=params.dataless,
     )
 
     nn_solver = Dt.Darcy_nn_Factory(factory_params).fit(
         training_data, validation_data, params.batch_size, output_dir, verbose=verbose
     )
     nn_solver.save(os.path.join(output_dir, "nets"))
-    make_loss_plot(output_dir)
-    return
+    make_loss_plots(output_dir)
+    return nn_solver
 
 
-def make_loss_plot(output_dir: str):
+def make_loss_plots(output_dir: str) -> None:
     df = pd.read_csv(os.path.join(output_dir, "loss.csv"))
-    training = df["training"].to_numpy()
-    validation = df["validation"].to_numpy()
-
-    fig, axes = plt.subplots(1, 2)
-
-    axes[0].plot(range(1, len(training) + 1), training, color="black")
-    # axes[0].scatter(range(1, len(training) + 1), training, color="black", marker="o")
-    axes[0].set_ylabel("PDE loss")
-    axes[0].set_xlabel("epochs")
-    axes[0].set_title("training")
-
-    axes[1].plot(
-        range(1, len(validation) + 1),
-        validation,
-    )
-    axes[1].plot(range(1, len(validation) + 1), validation, color="black")
-    # axes[1].scatter(
-    #    range(1, len(validation) + 1), validation, color="black", marker="o"
-    # )
-    # axes[1].set_ylabel("PDE loss")
-    axes[1].set_xlabel("epochs")
-    axes[1].set_title("validation")
-
-    fig.suptitle("Darcy Dataless Training", fontsize=16)
-    plt.savefig(os.path.join(output_dir, "loss_plots.png"))
+    for title in df.columns:
+        y = df[title].to_numpy()
+        plt.plot(range(1, len(y) + 1), y, color="black")
+        plt.title(title)
+        plt.xlabel("epochs")
+        plt.ylabel("loss")
+        plt.savefig(os.path.join(output_dir, title + ".png"))
+        plt.close()
 
 
 def make_DarcyTrainingParams_dataclass(params_dict: dict) -> Dt.DarcyTrainingParams:

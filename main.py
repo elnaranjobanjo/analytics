@@ -1,11 +1,14 @@
 import argparse
 import json
 import os
+import torch
 
 import engine as ng
 
 
 if __name__ == "__main__":
+    torch.set_default_dtype(torch.double)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("path_to_json", type=str, help="path_to_json", default="./")
     args = parser.parse_args()
