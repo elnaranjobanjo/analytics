@@ -45,7 +45,7 @@ class PDE_formulation:
 
 
 # Encodes the variational formulation for:
-#       div u = f
+#       -div u = f
 #    A grad p = u
 #           p = 0  b.c.
 # Intended for the generation of data for the sampling of the mapping A -> (u,p)
@@ -79,7 +79,7 @@ class Darcy_dual_formulation(PDE_formulation):
                 self.v,
             )
             + fe.div(self.v) * self.p
-            + fe.div(self.u) * self.q
+            - fe.div(self.u) * self.q
         ) * fe.dx
 
     def define_rhs(self) -> fe.Function:
@@ -92,7 +92,7 @@ class Darcy_dual_formulation(PDE_formulation):
 
 
 # Encodes the variational formulation for:
-#       div A grad p = f
+#       -div A grad p = f
 #           p = 0  b.c.
 # Intended for the generation of data for the sampling of the mapping A -> p
 class Darcy_primal_formulation(PDE_formulation):

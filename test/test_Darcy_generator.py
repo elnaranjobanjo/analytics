@@ -147,7 +147,7 @@ if __name__ == "__main__":
     p_expression = "x[0]*(1-x[0])*x[1]*(1-x[1])"
     test_params = Dg.DarcySimParams(
         degree=3,
-        f="2*(1-2*x[0])*(1-2*x[1])-10*x[1]*(1-x[1])-10*x[0]*(1-x[0])",
+        f="-(2*(1-2*x[0])*(1-2*x[1])-10*x[1]*(1-x[1])-10*x[0]*(1-x[0]))",
     )
 
     print("running primal formulation convergence test\n\n")
@@ -157,4 +157,4 @@ if __name__ == "__main__":
         "5*x[0]*(1-x[0])*(1-2*x[1])+x[1]*(1-x[1])*(1-2*x[0])",
     )
     print("\nrunning dual formulation convergence test\n\n")
-    # test_dual_convergence(hs, test_params, p_expression, u_expression)
+    test_dual_convergence(hs, test_params, p_expression, u_expression)

@@ -11,26 +11,26 @@ sys.path.append("./src/generators/")
 sys.path.append("./src/trainers/")
 
 import Darcy_generator as Dg
-import Darcy_trainer as Ddt
+import Darcy_trainer as Dt
 
 
-def print_Darcy_training_params(params: Ddt.DarcyTrainingParams) -> None:
-    print(f"degree = {params.degree}")
-    print(f"f = {params.f}")
-    print(f"A matrix params = {params.A_matrix_params}")
-    print(f"epochs = {params.epochs}")
-    print(f"learn rate = {params.learn_rate}")
-    if params.dataless:
-        print("dataless = True")
+def get_training_params(PDE: str, params_dict: dict):
+    if PDE == "Darcy_primal":
+        return make_DarcyTrainingParams_dataclass(
+            Dt.DarcyTrainingParams(formulation="primal"), params_dict
+        )
+    elif PDE == "Darcy_dual":
+        print(PDE)
+        return make_DarcyTrainingParams_dataclass(
+            Dt.DarcyTrainingParams(formulation="dual"), params_dict
+        )
     else:
-        print("dataless = False")
-    print(f"number of data points = {params.number_of_data_points}")
-    print(f"percentage set for validation = {params.percentage_for_validation}")
-    print(f"batch size = {params.batch_size}\n")
+        return ValueError(f"The PDE {PDE} is not implemented")
 
 
-def do_train(params: Ddt.DarcyTrainingParams, output_dir: str, verbose=False):
-    print("training Darcy nets begins with the following parameters\n")
+def do_train(PDE: str, params_dict: dict, output_dir: str, verbose=False):
+    params = get_training_params(PDE, params_dict)
+    print("training nets begins with the following parameters\n")
     print_Darcy_training_params(params)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -65,10 +65,7 @@ def do_train(params: Ddt.DarcyTrainingParams, output_dir: str, verbose=False):
         with open(os.path.join(output_dir, "log.txt"), "a") as file:
             file.write(f"Generating training data")
 
-        sim_params = Dg.DarcySimParams(
-            mesh=params.mesh, degree=params.degree, f=params.f
-        )
-        FEM_solver = Dg.Darcy_FEM_Solver(sim_params)
+        FEM_solver = Dg.Darcy_FEM_Solver(params)
         time_1 = time.time()
         Y = np.array(
             list(
@@ -90,8 +87,8 @@ def do_train(params: Ddt.DarcyTrainingParams, output_dir: str, verbose=False):
         training_data = [X_train, Y_train]
         validation_data = [X_val, Y_val]
 
-        num_u_dofs = FEM_solver.model_space.sub(0).dim()
-        num_p_dofs = FEM_solver.model_space.sub(1).dim()
+        num_u_dofs = FEM_solver.formulation.get_model_space().sub(0).dim()
+        num_p_dofs = FEM_solver.formulation.get_model_space().sub(1).dim()
         column_labels = [f"u_{i}" for i in range(num_u_dofs)] + [
             f"p_{i}" for i in range(num_p_dofs)
         ]
@@ -105,16 +102,17 @@ def do_train(params: Ddt.DarcyTrainingParams, output_dir: str, verbose=False):
     train_csv.to_csv(os.path.join(output_dir, "train.csv"), index=False)
     val_csv.to_csv(os.path.join(output_dir, "val.csv"), index=False)
 
-    factory_params = Ddt.DarcynnFactoryParams(
-        mesh=params.mesh,
-        degree=params.degree,
-        f=params.f,
-        epochs=params.epochs,
-        learn_rate=params.learn_rate,
-        dataless=params.dataless,
-    )
+    # factory_params = Dt.DarcynnFactoryParams(
+    #     formulation=params.formulation,
+    #     mesh=params.mesh,
+    #     degree=params.degree,
+    #     f=params.f,
+    #     epochs=params.epochs,
+    #     learn_rate=params.learn_rate,
+    #     dataless=params.dataless,
+    # )
 
-    nn_solver = Ddt.Darcy_nn_Factory(factory_params).fit(
+    nn_solver = Dt.Darcy_nn_Factory(params).fit(
         training_data, validation_data, params.batch_size, output_dir, verbose=verbose
     )
     nn_solver.save(os.path.join(output_dir, "nets"))
@@ -134,8 +132,9 @@ def make_loss_plots(output_dir: str) -> None:
         plt.close()
 
 
-def make_DarcyTrainingParams_dataclass(params_dict: dict) -> Ddt.DarcyTrainingParams:
-    params = Ddt.DarcyTrainingParams()
+def make_DarcyTrainingParams_dataclass(
+    params: Dt.DarcyTrainingParams, params_dict: dict
+) -> Dt.DarcyTrainingParams:
     for key, value in params_dict.items():
         if key == "mesh":
             params.mesh = fe.Mesh(value)
@@ -160,3 +159,19 @@ def make_DarcyTrainingParams_dataclass(params_dict: dict) -> Ddt.DarcyTrainingPa
         else:
             raise ValueError(f"The key {key} is not a Darcy training parameter")
     return params
+
+
+def print_Darcy_training_params(params: Dt.DarcyTrainingParams) -> None:
+    print(f"formulation = Darcy in {params.formulation} form")
+    print(f"degree = {params.degree}")
+    print(f"f = {params.f}")
+    print(f"A matrix params = {params.A_matrix_params}")
+    print(f"epochs = {params.epochs}")
+    print(f"learn rate = {params.learn_rate}")
+    if params.dataless:
+        print("dataless = True")
+    else:
+        print("dataless = False")
+    print(f"number of data points = {params.number_of_data_points}")
+    print(f"percentage set for validation = {params.percentage_for_validation}")
+    print(f"batch size = {params.batch_size}\n")
