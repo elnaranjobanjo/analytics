@@ -10,8 +10,8 @@ import time
 sys.path.append("./src/generators/")
 sys.path.append("./src/trainers/")
 
-import Darcy_dual_generator as Ddg
-import Darcy_dual_trainer as Ddt
+import Darcy_generator as Dg
+import Darcy_trainer as Ddt
 
 
 def print_Darcy_training_params(params: Ddt.DarcyTrainingParams) -> None:
@@ -65,10 +65,10 @@ def do_train(params: Ddt.DarcyTrainingParams, output_dir: str, verbose=False):
         with open(os.path.join(output_dir, "log.txt"), "a") as file:
             file.write(f"Generating training data")
 
-        sim_params = Ddg.DarcySimParams(
+        sim_params = Dg.DarcySimParams(
             mesh=params.mesh, degree=params.degree, f=params.f
         )
-        FEM_solver = Ddg.Darcy_FEM_Solver(sim_params)
+        FEM_solver = Dg.Darcy_FEM_Solver(sim_params)
         time_1 = time.time()
         Y = np.array(
             list(
