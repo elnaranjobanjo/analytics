@@ -43,8 +43,8 @@ class PDE_formulation:
     def get_model_space(self) -> fe.FunctionSpace:
         return self.model_space
 
-    def get_source_Lnp(self) -> np.array:
-        return fe.assemble(self.L).get_local()
+    # def get_source_Lnp(self) -> np.array:
+    #     return fe.assemble(self.L).get_local()
 
 
 # Encodes the variational formulation for:
@@ -54,6 +54,7 @@ class PDE_formulation:
 # Intended for the generation of data for the sampling of the mapping A -> (u,p)
 class Darcy_dual_formulation(PDE_formulation):
     def __init__(self, params: DarcySimParams):
+        super().__init__()
         self.f = params.f
         self.degree = params.degree
         self.model_space = self.define_model_space(params.mesh)
@@ -88,6 +89,9 @@ class Darcy_dual_formulation(PDE_formulation):
     def define_rhs(self) -> fe.Function:
         return fe.Expression(self.f, degree=self.degree - 1) * self.q * fe.dx
 
+    def get_rhs_vector(self) -> np.array:
+        return fe.assemble(self.L).array()
+
     def assemble_linear_system(self, A_matrix_params: list) -> np.array:
         return fe.assemble(
             self.define_linear_system(get_A_matrix_from(A_matrix_params))
@@ -105,6 +109,7 @@ class Darcy_dual_formulation(PDE_formulation):
 # Intended for the generation of data for the sampling of the mapping A -> p
 class Darcy_primal_formulation(PDE_formulation):
     def __init__(self, params):
+        super().__init__()
         self.f = params.f
         self.degree = params.degree
         self.model_space = self.define_model_space(params.mesh)
@@ -137,6 +142,16 @@ class Darcy_primal_formulation(PDE_formulation):
             )
 
         return fe.DirichletBC(self.model_space, fe.Constant(0.0), boundary)
+
+    def assemble_linear_system(self, A_matrix_params: list) -> np.array:
+        A = fe.assemble(self.define_linear_system(get_A_matrix_from(A_matrix_params)))
+        self.bc.apply(A)
+        return A.array()
+
+    def get_rhs_vector(self) -> np.array:
+        b = fe.assemble(self.L)
+        self.bc.apply(b)
+        return b.get_local()
 
     def solve(self, A: np.array) -> fe.Function:
         sol = self.initialize_function()

@@ -30,7 +30,7 @@ def get_training_params(PDE: str, params_dict: dict):
 
 def do_train(PDE: str, params_dict: dict, output_dir: str, verbose=False):
     params = get_training_params(PDE, params_dict)
-    print("training nets begins with the following parameters\n")
+    print("Training nets begins with the following parameters\n")
     print_Darcy_training_params(params)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -87,11 +87,13 @@ def do_train(PDE: str, params_dict: dict, output_dir: str, verbose=False):
         training_data = [X_train, Y_train]
         validation_data = [X_val, Y_val]
 
-        num_u_dofs = FEM_solver.formulation.get_model_space().sub(0).dim()
-        num_p_dofs = FEM_solver.formulation.get_model_space().sub(1).dim()
-        column_labels = [f"u_{i}" for i in range(num_u_dofs)] + [
-            f"p_{i}" for i in range(num_p_dofs)
-        ]
+        # num_u_dofs = FEM_solver.formulation.get_model_space().sub(0).dim()
+        # num_p_dofs = FEM_solver.formulation.get_model_space().sub(1).dim()
+        # column_labels = [f"u_{i}" for i in range(num_u_dofs)] + [
+        #     f"p_{i}" for i in range(num_p_dofs)
+        # ]
+        num_p_dofs = FEM_solver.formulation.get_model_space().dim()
+        column_labels = [f"p_{i}" for i in range(num_p_dofs)]
 
         Y_train_csv = pd.DataFrame(Y_train, columns=column_labels)
         Y_val_csv = pd.DataFrame(Y_val, columns=column_labels)
@@ -101,16 +103,6 @@ def do_train(PDE: str, params_dict: dict, output_dir: str, verbose=False):
 
     train_csv.to_csv(os.path.join(output_dir, "train.csv"), index=False)
     val_csv.to_csv(os.path.join(output_dir, "val.csv"), index=False)
-
-    # factory_params = Dt.DarcynnFactoryParams(
-    #     formulation=params.formulation,
-    #     mesh=params.mesh,
-    #     degree=params.degree,
-    #     f=params.f,
-    #     epochs=params.epochs,
-    #     learn_rate=params.learn_rate,
-    #     dataless=params.dataless,
-    # )
 
     nn_solver = Dt.Darcy_nn_Factory(params).fit(
         training_data, validation_data, params.batch_size, output_dir, verbose=verbose
