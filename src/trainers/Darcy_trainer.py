@@ -17,7 +17,7 @@ import Darcy_generator as Dg
 @dataclass
 class DarcyTrainingParams:
     formulation: str = "primal"
-    mesh: fe.Mesh = fe.UnitSquareMesh(10, 10)
+    mesh: fe.Mesh = fe.UnitSquareMesh(5, 5)
     degree: int = 1
     f: str = "10"
     A_matrix_params: list[list[float], list[float]] = field(
@@ -294,7 +294,7 @@ class Darcy_dual_trainer(PDE_trainer):
         self.u_optimizer = torch.optim.Adam(self.u_net.parameters(), params.learn_rate)
         self.p_optimizer = torch.optim.Adam(self.p_net.parameters(), params.learn_rate)
 
-        self.Data_loss = nn.MSELoss()
+        self.data_loss = nn.MSELoss()
 
     def calculate_PDE_loss(self, x_batch):
         loss = 0
@@ -335,7 +335,8 @@ class Darcy_primal_trainer(PDE_trainer):
         device, input_size = super().__init__()
         self.PDE_loss = Darcy_primal_PDE_Loss(params)
         output_size = self.PDE_loss.formulation.get_model_space().dim()
-        hidden_size = int((2 / 3) * (input_size + output_size))
+        # hidden_size = int((2 / 3) * (input_size + output_size))
+        hidden_size = 500
 
         self.p_net = Darcy_nn(
             input_size=input_size,
@@ -347,7 +348,7 @@ class Darcy_primal_trainer(PDE_trainer):
             self.p_net.parameters(), lr=params.learn_rate
         )
 
-        self.Data_loss = nn.MSELoss()
+        self.data_loss = nn.MSELoss()
 
     def calculate_PDE_loss(self, x_batch):
         loss = 0
@@ -358,14 +359,17 @@ class Darcy_primal_trainer(PDE_trainer):
 
         return loss / len(x_batch)
 
-    def calculate_data_loss(self, x_batch, y_batch):
-        loss = 0
-        for x, y in zip(x_batch, y_batch):
-            bias_term = torch.tensor([1], dtype=x.dtype)
-            x_with_bias = torch.cat((bias_term, x), dim=0)
-            loss += self.Data_loss(self.p_net(x_with_bias), y)
+    # def calculate_data_loss(self, x_batch, y_batch):
+    #     loss = 0
+    #     for x, y in zip(x_batch, y_batch):
+    #         bias_term = torch.tensor([1], dtype=x.dtype)
+    #         x_with_bias = torch.cat((bias_term, x), dim=0)
+    #         loss += self.Data_loss(self.p_net(x_with_bias), y)
 
-        return loss / len(x_batch)
+    #     return loss / len(x_batch)
+    def calculate_data_loss(self, X_batch, Y_batch):
+        X_batch = torch.cat((X_batch, torch.ones(X_batch.shape[0], 1)), dim=1)
+        return self.data_loss(self.p_net(X_batch), Y_batch)
 
     def get_nn_solver(self):
         return Darcy_primal_nn_solver().init_from_nets(
@@ -474,8 +478,10 @@ class Darcy_nn_Factory:
                 total_loss = Data_loss
                 training_loss[2].append(Data_loss.item())
 
-            # PDE_loss = self.trainer.calculate_PDE_loss(x_batch)
-            PDE_loss = 0
+            x_batch.requires_grad = True
+
+            PDE_loss = self.trainer.calculate_PDE_loss(x_batch)
+            # PDE_loss = 0
             total_loss = total_loss + PDE_loss
             # training_loss[1].append(PDE_loss.item())
             training_loss[1].append(0)
@@ -484,23 +490,27 @@ class Darcy_nn_Factory:
             total_loss.backward()
             self.trainer.step()
 
-        for batch in validation_loader:
-            if self.dataless:
-                x_batch = batch[0]
-                total_val_loss = 0
-                validation_loss[2].append(0)
-            else:
-                x_batch, y_batch = batch
-                Data_loss = self.trainer.calculate_data_loss(x_batch, y_batch)
-                total_val_loss = Data_loss
-                validation_loss[2].append(Data_loss.item())
-
-            # PDE_loss = self.trainer.calculate_PDE_loss(x_batch)
-            PDE_loss = 0
-            total_val_loss = total_val_loss + PDE_loss
+            validation_loss[0].append(0)
             validation_loss[1].append(0)
-            # validation_loss[1].append(PDE_loss.item())
-            validation_loss[0].append(total_val_loss.item())
+            validation_loss[2].append(0)
+
+        # for batch in validation_loader:
+        #     if self.dataless:
+        #         x_batch = batch[0]
+        #         total_val_loss = 0
+        #         validation_loss[2].append(0)
+        #     else:
+        #         x_batch, y_batch = batch
+        #         Data_loss = self.trainer.calculate_data_loss(x_batch, y_batch)
+        #         total_val_loss = Data_loss
+        #         validation_loss[2].append(Data_loss.item())
+
+        #     # PDE_loss = self.trainer.calculate_PDE_loss(x_batch)
+        #     PDE_loss = 0
+        #     total_val_loss = total_val_loss + PDE_loss
+        #     validation_loss[1].append(0)
+        #     # validation_loss[1].append(PDE_loss.item())
+        #     validation_loss[0].append(total_val_loss.item())
 
         return [np.array(loss).mean(axis=0) for loss in training_loss], [
             np.array(loss).mean(axis=0) for loss in validation_loss

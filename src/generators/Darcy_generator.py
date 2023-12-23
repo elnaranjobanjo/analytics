@@ -14,19 +14,21 @@ class DarcySimParams:
 def get_matrix_params_from(A: np.array) -> list:
     eig_vals, eig_vecs = np.linalg.eig(A)
     # When A is symmetric eig_vecs is a rotation matrix
+    # However, different selection for the eigen vectors will result in different rotation angles
     cos_theta = eig_vecs[0, 0]
-    sin_theta = eig_vecs[1, 0]
+    sin_theta = -eig_vecs[1, 0]
     return [eig_vals[0], eig_vals[1], np.arctan2(sin_theta, cos_theta)]
 
 
-def get_A_matrix_from(A_matrix_params: list):
-    eigen_1 = A_matrix_params[0]
-    eigen_2 = A_matrix_params[1]
-    theta = A_matrix_params[2]
-    return (
-        np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
-        * np.array([[eigen_1, 0], [0, eigen_2]])
-        * np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+def get_A_matrix_from(A_matrix_params: list, verbose=False):
+    R = np.array(
+        [
+            [np.cos(A_matrix_params[2]), -np.sin(A_matrix_params[2])],
+            [np.sin(A_matrix_params[2]), np.cos(A_matrix_params[2])],
+        ]
+    )
+    return np.matmul(
+        np.matmul(R, np.array([[A_matrix_params[0], 0], [0, A_matrix_params[1]]])), R.T
     )
 
 
@@ -166,9 +168,7 @@ class Darcy_FEM_Solver:
         elif params.formulation == "primal":
             self.formulation = Darcy_primal_formulation(params)
         else:
-            return ValueError(
-                f"The formulation {params.formulation} is not implemented"
-            )
+            ValueError(f"The formulation {params.formulation} is not implemented")
 
     def compute_solution_eig_rep(
         self,
