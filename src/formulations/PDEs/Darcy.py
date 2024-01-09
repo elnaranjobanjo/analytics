@@ -13,7 +13,7 @@ def get_matrix_params_from(A: np.array) -> list:
     return [eig_vals[0], eig_vals[1], np.arctan2(sin_theta, cos_theta)]
 
 
-def get_A_matrix_from(A_matrix_params: list, verbose=False):
+def get_A_matrix_from(A_matrix_params: list):
     R = np.array(
         [
             [np.cos(A_matrix_params[2]), -np.sin(A_matrix_params[2])],
@@ -68,7 +68,7 @@ class Darcy_dual_formulation(F.PDE_formulation):
         return fe.Expression(self.f, degree=self.degree - 1) * self.q * fe.dx
 
     def get_rhs_vector(self) -> np.array:
-        return fe.assemble(self.L).array()
+        return fe.assemble(self.L).get_local()
 
     def assemble_linear_system(self, A_matrix_params: list) -> np.array:
         return fe.assemble(

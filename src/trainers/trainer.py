@@ -101,7 +101,6 @@ class PDE_trainer(ABC):
             device = torch.device("cuda")
         else:
             device = torch.device("cpu")
-        input_size = 4
 
         self.data_loss = nn.MSELoss()
         self.PDE_loss_type = nn.MSELoss()
@@ -139,7 +138,7 @@ class PDE_trainer(ABC):
             )
         self.losses = losses
 
-        return device, input_size
+        return device
 
     def multiple_net_eval(self, x: torch.tensor) -> torch.tensor:
         return torch.cat(
@@ -155,7 +154,7 @@ class PDE_trainer(ABC):
                 )
                 for net in self.nets.values()
             ],
-            dim=0,
+            dim=1,
         )
 
     def single_net_eval(self, x):

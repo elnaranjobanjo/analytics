@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import fenics as fe
 
@@ -10,7 +11,7 @@ class formulation_params:
     f: str = "10"
 
 
-class PDE_formulation:
+class PDE_formulation(ABC):
     def __init__(self):
         pass
 
@@ -22,9 +23,6 @@ class PDE_formulation:
 
     def get_model_space(self) -> fe.FunctionSpace:
         return self.model_space
-
-    # def get_source_Lnp(self) -> np.array:
-    #     return fe.assemble(self.L).get_local()
 
 
 import sys
