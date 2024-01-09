@@ -7,31 +7,18 @@ import random
 import sys
 import time
 
-sys.path.append("./src/generators/")
+sys.path.append("./src/FEM_solvers/")
+sys.path.append("./src/formulations/")
 sys.path.append("./src/trainers/")
 
-import Darcy_generator as Dg
-import Darcy_trainer as Dt
-
-
-def get_training_params(PDE: str, params_dict: dict):
-    if PDE == "Darcy_primal":
-        return make_DarcyTrainingParams_dataclass(
-            Dt.DarcyTrainingParams(formulation="primal"), params_dict
-        )
-    elif PDE == "Darcy_dual":
-        print(PDE)
-        return make_DarcyTrainingParams_dataclass(
-            Dt.DarcyTrainingParams(formulation="dual"), params_dict
-        )
-    else:
-        return ValueError(f"The PDE {PDE} is not implemented")
+import FEM_solver as S
+import trainer as T
 
 
 def do_train(PDE: str, params_dict: dict, output_dir: str, verbose=False):
-    params = get_training_params(PDE, params_dict)
+    params = make_training_params_dataclass(PDE, params_dict)
     print("Training nets begins with the following parameters\n")
-    print_Darcy_training_params(params)
+    print_training_params(params)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -56,16 +43,12 @@ def do_train(PDE: str, params_dict: dict, output_dir: str, verbose=False):
     train_csv = pd.DataFrame(X_train, columns=["eig_1", "eig_2", "theta"])
     val_csv = pd.DataFrame(X_val, columns=["eig_1", "eig_2", "theta"])
 
-    if params.dataless:
-        training_data = [X_train]
-        validation_data = [X_val]
-
-    else:
-        print("Generating Training Data")
+    if "data" in params.losses_to_use:
+        print("Generating Training Data\n")
         with open(os.path.join(output_dir, "log.txt"), "a") as file:
             file.write(f"Generating training data")
 
-        FEM_solver = Dg.Darcy_FEM_Solver(params)
+        FEM_solver = S.Darcy_FEM_Solver(params)
         time_1 = time.time()
         Y = np.array(
             list(
@@ -100,11 +83,14 @@ def do_train(PDE: str, params_dict: dict, output_dir: str, verbose=False):
 
         train_csv = pd.concat([train_csv, Y_train_csv], axis=1)
         val_csv = pd.concat([val_csv, Y_val_csv], axis=1)
+    else:
+        training_data = [X_train]
+        validation_data = [X_val]
 
     train_csv.to_csv(os.path.join(output_dir, "train.csv"), index=False)
     val_csv.to_csv(os.path.join(output_dir, "val.csv"), index=False)
-
-    nn_solver = Dt.Darcy_nn_Factory(params).fit(
+    print("Training nets\n")
+    nn_solver = T.nn_Factory(params).fit(
         training_data, validation_data, params.batch_size, output_dir, verbose=verbose
     )
     nn_solver.save(os.path.join(output_dir, "nets"))
@@ -124,9 +110,9 @@ def make_loss_plots(output_dir: str) -> None:
         plt.close()
 
 
-def make_DarcyTrainingParams_dataclass(
-    params: Dt.DarcyTrainingParams, params_dict: dict
-) -> Dt.DarcyTrainingParams:
+def make_training_params_dataclass(PDE: str, params_dict: dict) -> T.training_params:
+    params = T.training_params(PDE=PDE)
+    params.PDE = PDE
     for key, value in params_dict.items():
         if key == "mesh":
             params.mesh = fe.Mesh(value)
@@ -140,8 +126,8 @@ def make_DarcyTrainingParams_dataclass(
             params.epochs = value
         elif key == "learn_rate":
             params.learn_rate = value
-        elif key == "dataless":
-            params.dataless = value
+        elif key == "losses_to_use":
+            params.losses_to_use = value
         elif key == "number_of_data_points":
             params.number_of_data_points = value
         elif key == "percentage_for_validation":
@@ -153,17 +139,14 @@ def make_DarcyTrainingParams_dataclass(
     return params
 
 
-def print_Darcy_training_params(params: Dt.DarcyTrainingParams) -> None:
-    print(f"formulation = Darcy in {params.formulation} form")
+def print_training_params(params: T.training_params) -> None:
+    print(f"PDE =  {params.PDE}")
     print(f"degree = {params.degree}")
     print(f"f = {params.f}")
     print(f"A matrix params = {params.A_matrix_params}")
     print(f"epochs = {params.epochs}")
     print(f"learn rate = {params.learn_rate}")
-    if params.dataless:
-        print("dataless = True")
-    else:
-        print("dataless = False")
+    print(f"losses_to_use = {params.losses_to_use}")
     print(f"number of data points = {params.number_of_data_points}")
     print(f"percentage set for validation = {params.percentage_for_validation}")
     print(f"batch size = {params.batch_size}\n")

@@ -1,14 +1,7 @@
 import fenics as fe
 import numpy as np
-from dataclasses import dataclass
 
-
-@dataclass
-class DarcySimParams:
-    formulation: str = "primal"
-    mesh: fe.Mesh = fe.UnitSquareMesh(10, 10)
-    degree: int = 1
-    f: str = "10"
+import formulation as F
 
 
 def get_matrix_params_from(A: np.array) -> list:
@@ -32,30 +25,13 @@ def get_A_matrix_from(A_matrix_params: list, verbose=False):
     )
 
 
-class PDE_formulation:
-    def __init__(self):
-        pass
-
-    def initialize_function(self) -> fe.Function:
-        return fe.Function(self.model_space)
-
-    def get_mesh(self) -> fe.Mesh:
-        return self.model_space.mesh()
-
-    def get_model_space(self) -> fe.FunctionSpace:
-        return self.model_space
-
-    # def get_source_Lnp(self) -> np.array:
-    #     return fe.assemble(self.L).get_local()
-
-
 # Encodes the variational formulation for:
 #       -div u = f
 #    A grad p = u
 #           p = 0  b.c.
 # Intended for the generation of data for the sampling of the mapping A -> (u,p)
-class Darcy_dual_formulation(PDE_formulation):
-    def __init__(self, params: DarcySimParams):
+class Darcy_dual_formulation(F.PDE_formulation):
+    def __init__(self, params: F.formulation_params):
         super().__init__()
         self.f = params.f
         self.degree = params.degree
@@ -109,8 +85,8 @@ class Darcy_dual_formulation(PDE_formulation):
 #       -div A grad p = f
 #           p = 0  b.c.
 # Intended for the generation of data for the sampling of the mapping A -> p
-class Darcy_primal_formulation(PDE_formulation):
-    def __init__(self, params):
+class Darcy_primal_formulation(F.PDE_formulation):
+    def __init__(self, params: F.formulation_params):
         super().__init__()
         self.f = params.f
         self.degree = params.degree
@@ -159,44 +135,3 @@ class Darcy_primal_formulation(PDE_formulation):
         sol = self.initialize_function()
         fe.solve(self.define_linear_system(A) == self.L, sol, self.bc)
         return sol
-
-
-class Darcy_FEM_Solver:
-    def __init__(self, params: DarcySimParams):
-        if params.formulation == "dual":
-            self.formulation = Darcy_dual_formulation(params)
-        elif params.formulation == "primal":
-            self.formulation = Darcy_primal_formulation(params)
-        else:
-            ValueError(f"The formulation {params.formulation} is not implemented")
-
-    def compute_solution_eig_rep(
-        self,
-        A_matrix_params: list,
-        supress_fe_log: bool = True,
-    ):
-        return self.compute_solution_from_A(
-            get_A_matrix_from(A_matrix_params),
-            supress_fe_log=supress_fe_log,
-        )
-
-    def compute_solution_from_A(
-        self,
-        A: np.array,
-        supress_fe_log: bool = True,
-    ) -> tuple[np.array, np.array]:
-        return (
-            self.solve_variational_form(A, supress_fe_log=supress_fe_log)
-            .vector()
-            .get_local()
-        )
-
-    def solve_variational_form(
-        self,
-        A: np.array,
-        supress_fe_log: bool = True,
-    ) -> fe.Function:
-        if supress_fe_log:
-            fe.set_log_level(50)
-
-        return self.formulation.solve(A)
