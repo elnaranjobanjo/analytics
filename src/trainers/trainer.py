@@ -11,13 +11,12 @@ import os
 import pandas as pd
 import sys
 
+import formulation as F
+
 
 @dataclass
 class training_params:
-    PDE: str = "Darcy_primal"
-    mesh: fe.Mesh = fe.UnitSquareMesh(5, 5)
-    degree: int = 1
-    f: str = "10"
+    formulation_params: F.formulation_params = F.formulation_params()
     A_matrix_params: list[list[float], list[float]] = field(
         default_factory=lambda: [[5, 10], [5, 10]]
     )
@@ -215,9 +214,9 @@ import Darcy_trainers as Dt
 
 class nn_Factory:
     def __init__(self, params: training_params):
-        if params.PDE == "Darcy_primal":
+        if params.formulation_params.PDE == "Darcy_primal":
             self.trainer = Dt.Darcy_primal_trainer(params)
-        elif params.PDE == "Darcy_dual":
+        elif params.formulation_params.PDE == "Darcy_dual":
             self.trainer = Dt.Darcy_dual_trainer(params)
         else:
             ValueError(f"The PDE {params.PDE} is not implemented")

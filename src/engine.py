@@ -12,6 +12,7 @@ sys.path.append("./src/formulations/")
 sys.path.append("./src/trainers/")
 
 import FEM_solver as S
+import formulation as F
 import trainer as T
 
 
@@ -48,7 +49,7 @@ def do_train(PDE: str, params_dict: dict, output_dir: str, verbose=False):
         with open(os.path.join(output_dir, "log.txt"), "a") as file:
             file.write(f"Generating training data")
 
-        FEM_solver = S.Darcy_FEM_Solver(params)
+        FEM_solver = S.Darcy_FEM_Solver(params.formulation_params)
         time_1 = time.time()
         Y = np.array(
             list(
@@ -110,17 +111,34 @@ def make_loss_plots(output_dir: str) -> None:
         plt.close()
 
 
-def make_training_params_dataclass(PDE: str, params_dict: dict) -> T.training_params:
-    params = T.training_params(PDE=PDE)
-    params.PDE = PDE
+def make_formulation_params_dataclass(params_dict: dict) -> F.formulation_params:
+    params = F.formulation_params()
     for key, value in params_dict.items():
-        if key == "mesh":
-            params.mesh = fe.Mesh(value)
+        if key == "PDE":
+            params.PDE = value
+        elif key == "mesh":
+            if value[0] == "unit_square":
+                params.mesh = fe.UnitSquareMesh(value[1], value[1])
+            else:
+                raise ValueError(f"The mesh type {value[0]} is not implemented")
         elif key == "degree":
             params.degree = value
         elif key == "f":
             params.f = value
-        elif key == "A_matrix_params":
+        else:
+            raise ValueError(f"The key {key} is not a formulation")
+
+    return params
+
+
+def make_training_params_dataclass(
+    formulation_dict: str, params_dict: dict
+) -> T.training_params:
+    params = T.training_params(
+        formulation_params=make_formulation_params_dataclass(formulation_dict)
+    )
+    for key, value in params_dict.items():
+        if key == "A_matrix_params":
             params.A_matrix_params = value
         elif key == "epochs":
             params.epochs = value
@@ -135,14 +153,18 @@ def make_training_params_dataclass(PDE: str, params_dict: dict) -> T.training_pa
         elif key == "batch_size":
             params.batch_size = value
         else:
-            raise ValueError(f"The key {key} is not a Darcy training parameter")
+            raise ValueError(f"The key {key} is not a training parameter")
     return params
 
 
-def print_training_params(params: T.training_params) -> None:
+def print_formulation_params(params: F.formulation_params) -> None:
     print(f"PDE =  {params.PDE}")
     print(f"degree = {params.degree}")
     print(f"f = {params.f}")
+
+
+def print_training_params(params: T.training_params) -> None:
+    print_formulation_params(params.formulation_params)
     print(f"A matrix params = {params.A_matrix_params}")
     print(f"epochs = {params.epochs}")
     print(f"learn rate = {params.learn_rate}")

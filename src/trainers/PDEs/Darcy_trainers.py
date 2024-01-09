@@ -40,7 +40,7 @@ class Darcy_trainer(T.PDE_trainer):
 class Darcy_dual_trainer(Darcy_trainer):
     def __init__(self, params: T.training_params):
         device, input_size = super().__init__(params)
-        self.formulation = F.D.Darcy_dual_formulation(params)
+        self.formulation = F.D.Darcy_dual_formulation(params.formulation_params)
         self.f = torch.from_numpy(self.formulation.get_rhs_vector())
         u_output_size = self.formulation.get_model_space().sub(0).dim()
         u_hidden_size = T.dense_net_size_heuristic(input_size, u_output_size)
@@ -77,7 +77,7 @@ class Darcy_dual_trainer(Darcy_trainer):
 class Darcy_primal_trainer(Darcy_trainer):
     def __init__(self, params: T.training_params):
         device, input_size = super().__init__(params)
-        self.formulation = F.D.Darcy_primal_formulation(params)
+        self.formulation = F.D.Darcy_primal_formulation(params.formulation_params)
         self.f = torch.from_numpy(self.formulation.get_rhs_vector())
         output_size = self.formulation.get_model_space().dim()
         hidden_size = T.dense_net_size_heuristic(input_size, output_size)
