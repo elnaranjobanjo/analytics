@@ -9,17 +9,22 @@ import time
 
 sys.path.append("./src/FEM_solvers/")
 sys.path.append("./src/formulations/")
-sys.path.append("./src/trainers/")
+sys.path.append("./src/hp_tuning/")
+sys.path.append("./src/AI/")
 
 import FEM_solver as S
 import formulation as F
+import hp_tuning as H
+import neural_networks as nn
 import trainer as T
 
 
-def do_train(PDE: str, params_dict: dict, output_dir: str, verbose=False):
-    params = make_training_params_dataclass(PDE, params_dict)
+def do_train(
+    formulation_dict: dict, nn_dict, training_dict: dict, output_dir: str, verbose=False
+):
+    params = T.make_training_params_dataclass(formulation_dict, nn_dict, training_dict)
     print("Training nets begins with the following parameters\n")
-    print_training_params(params)
+    T.print_training_params(params)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -99,6 +104,10 @@ def do_train(PDE: str, params_dict: dict, output_dir: str, verbose=False):
     return nn_solver
 
 
+def do_hp_tuning(hp_dict: dict, training_dict: dict, output_dir: str, verbose=False):
+    pass
+
+
 def make_loss_plots(output_dir: str) -> None:
     df = pd.read_csv(os.path.join(output_dir, "loss.csv"))
     for title in df.columns:
@@ -109,66 +118,3 @@ def make_loss_plots(output_dir: str) -> None:
         plt.ylabel("loss")
         plt.savefig(os.path.join(output_dir, title + ".png"))
         plt.close()
-
-
-def make_formulation_params_dataclass(params_dict: dict) -> F.formulation_params:
-    params = F.formulation_params()
-    for key, value in params_dict.items():
-        if key == "PDE":
-            params.PDE = value
-        elif key == "mesh":
-            if value[0] == "unit_square":
-                params.mesh = fe.UnitSquareMesh(value[1], value[1])
-            else:
-                raise ValueError(f"The mesh type {value[0]} is not implemented")
-        elif key == "degree":
-            params.degree = value
-        elif key == "f":
-            params.f = value
-        else:
-            raise ValueError(f"The key {key} is not a formulation")
-
-    return params
-
-
-def make_training_params_dataclass(
-    formulation_dict: str, params_dict: dict
-) -> T.training_params:
-    params = T.training_params(
-        formulation_params=make_formulation_params_dataclass(formulation_dict)
-    )
-    for key, value in params_dict.items():
-        if key == "A_matrix_params":
-            params.A_matrix_params = value
-        elif key == "epochs":
-            params.epochs = value
-        elif key == "learn_rate":
-            params.learn_rate = value
-        elif key == "losses_to_use":
-            params.losses_to_use = value
-        elif key == "number_of_data_points":
-            params.number_of_data_points = value
-        elif key == "percentage_for_validation":
-            params.percentage_for_validation = value
-        elif key == "batch_size":
-            params.batch_size = value
-        else:
-            raise ValueError(f"The key {key} is not a training parameter")
-    return params
-
-
-def print_formulation_params(params: F.formulation_params) -> None:
-    print(f"PDE =  {params.PDE}")
-    print(f"degree = {params.degree}")
-    print(f"f = {params.f}")
-
-
-def print_training_params(params: T.training_params) -> None:
-    print_formulation_params(params.formulation_params)
-    print(f"A matrix params = {params.A_matrix_params}")
-    print(f"epochs = {params.epochs}")
-    print(f"learn rate = {params.learn_rate}")
-    print(f"losses_to_use = {params.losses_to_use}")
-    print(f"number of data points = {params.number_of_data_points}")
-    print(f"percentage set for validation = {params.percentage_for_validation}")
-    print(f"batch size = {params.batch_size}\n")

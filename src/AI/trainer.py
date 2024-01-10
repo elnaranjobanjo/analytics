@@ -5,18 +5,19 @@ import fenics as fe
 import json
 import numpy as np
 import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 import os
 import pandas as pd
 import sys
 
 import formulation as F
+import neural_networks as nn
 
 
 @dataclass
 class training_params:
     formulation_params: F.formulation_params = F.formulation_params()
+    nn_params: nn.nn_params = nn.nn_params()
     A_matrix_params: list[list[float], list[float]] = field(
         default_factory=lambda: [[5, 10], [5, 10]]
     )
@@ -28,31 +29,44 @@ class training_params:
     batch_size: int = 10
 
 
-def dense_net_size_heuristic(input_size: int, output_size: int) -> int:
-    return int((2 / 3) * (input_size + output_size))
+def print_training_params(params: training_params) -> None:
+    F.print_formulation_params(params.formulation_params)
+    nn.print_neural_net_params(params.nn_params)
+    print(f"Training specs:")
+    print(f"A matrix params = {params.A_matrix_params}")
+    print(f"epochs = {params.epochs}")
+    print(f"learn rate = {params.learn_rate}")
+    print(f"losses_to_use = {params.losses_to_use}")
+    print(f"number of data points = {params.number_of_data_points}")
+    print(f"percentage set for validation = {params.percentage_for_validation}")
+    print(f"batch size = {params.batch_size}\n")
 
 
-class dense_nn(nn.Module):
-    def __init__(
-        self, input_size: int = 4, hidden_size: int = 64, output_size: int = 1
-    ):
-        super(dense_nn, self).__init__()
-        self.fc1 = nn.Linear(input_size, hidden_size)
-        self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.fc3 = nn.Linear(hidden_size, hidden_size)
-        self.fc4 = nn.Linear(hidden_size, hidden_size)
-        self.fc5 = nn.Linear(hidden_size, hidden_size)
-        self.fc6 = nn.Linear(hidden_size, output_size)
-        self.activation = nn.GELU()
-
-    def forward(self, x: torch.tensor):
-        x = self.activation(self.fc1(x))
-        x = self.activation(self.fc2(x))
-        x = self.activation(self.fc3(x))
-        x = self.activation(self.fc4(x))
-        x = self.activation(self.fc5(x))
-        x = self.fc6(x)
-        return x
+def make_training_params_dataclass(
+    formulation_dict: dict, nn_dict: dict, params_dict: dict
+) -> training_params:
+    params = training_params(
+        formulation_params=F.make_formulation_params_dataclass(formulation_dict),
+        nn_params=nn.make_nn_params_dataclass(nn_dict),
+    )
+    for key, value in params_dict.items():
+        if key == "A_matrix_params":
+            params.A_matrix_params = value
+        elif key == "epochs":
+            params.epochs = value
+        elif key == "learn_rate":
+            params.learn_rate = value
+        elif key == "losses_to_use":
+            params.losses_to_use = value
+        elif key == "number_of_data_points":
+            params.number_of_data_points = value
+        elif key == "percentage_for_validation":
+            params.percentage_for_validation = value
+        elif key == "batch_size":
+            params.batch_size = value
+        else:
+            raise ValueError(f"The key {key} is not a training parameter")
+    return params
 
 
 class nn_solver(ABC):
@@ -78,6 +92,10 @@ class nn_solver(ABC):
 
         for net_name, net in self.nets.items():
             torch.save(net.state_dict(), os.path.join(directory_path, net_name + ".pt"))
+            with open(
+                os.path.join(directory_path, net_name + "_nn_params.json"), "w"
+            ) as json_file:
+                json.dump(nn.nn_params_dataclass_to_dict(net.params), json_file)
 
     def load_mesh_and_device(self, directory_path: str) -> (fe.Mesh, int, torch.device):
         with open(os.path.join(directory_path, "degree.json"), "r") as json_file:
@@ -101,8 +119,8 @@ class PDE_trainer(ABC):
         else:
             device = torch.device("cpu")
 
-        self.data_loss = nn.MSELoss()
-        self.PDE_loss_type = nn.MSELoss()
+        self.data_loss = torch.nn.MSELoss()
+        self.PDE_loss_type = torch.nn.MSELoss()
 
         if len(params.losses_to_use) > 2:
             ValueError(
@@ -208,7 +226,7 @@ class PDE_trainer(ABC):
             optimizer.zero_grad()
 
 
-sys.path.append("./src/trainers/PDEs/")
+sys.path.append("./src/AI/PDEs/")
 import Darcy_trainers as Dt
 
 

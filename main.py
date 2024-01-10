@@ -13,6 +13,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("path_to_json", type=str, help="path_to_json", default="./")
+    parser.add_argument("-tasks", type=str, help="task")
     args = parser.parse_args()
     with open(args.path_to_json, "r") as json_file:
         json_file = json.load(json_file)
@@ -20,12 +21,21 @@ if __name__ == "__main__":
     output_dir = os.path.join(
         os.path.dirname(args.path_to_json), json_file["output_dir"]
     )
-
-    nn_solver = ng.do_train(
-        json_file["formulation_params"],
-        json_file["training_params"],
-        output_dir,
-        verbose=True,
-    )
-
-    # solver = Darcy_Solver().load(os.path.join(output_dir, "nets"))
+    print(f"{args.tasks = }")
+    if args.tasks == "train":
+        nn_solver = ng.do_train(
+            json_file["formulation_params"],
+            json_file["nn_params"],
+            json_file["training_params"],
+            output_dir,
+            verbose=True,
+        )
+    elif args.tasks == "hp_tune":
+        ng.do_hp_tuning(
+            json_file["formulation_params"],
+            json_file["hp_search"],
+            output_dir,
+            verbose=True,
+        )
+    else:
+        ValueError(f"The task {args.tasks} is not implemented.")

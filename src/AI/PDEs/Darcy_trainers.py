@@ -1,12 +1,13 @@
-import json
 import fenics as fe
 import numpy as np
-import os
 import torch
-import torch.nn as nn
+import sys
+
+sys.path.append("./src/AI/")
 
 import trainer as T
 import formulation as F
+import neural_networks as nn
 
 
 class Darcy_trainer(T.PDE_trainer):
@@ -43,21 +44,15 @@ class Darcy_dual_trainer(Darcy_trainer):
         self.formulation = F.D.Darcy_dual_formulation(params.formulation_params)
         self.f = torch.from_numpy(self.formulation.get_rhs_vector())
         u_output_size = self.formulation.get_model_space().sub(0).dim()
-        u_hidden_size = T.dense_net_size_heuristic(input_size, u_output_size)
         p_output_size = self.formulation.get_model_space().sub(1).dim()
-        p_hidden_size = T.dense_net_size_heuristic(input_size, p_output_size)
 
         self.nets = {
-            "u_net": T.dense_nn(
-                input_size=input_size,
-                hidden_size=u_hidden_size,
-                output_size=u_output_size,
-            ).to(device),
-            "p_net": T.dense_nn(
-                input_size=input_size,
-                hidden_size=p_hidden_size,
-                output_size=p_output_size,
-            ).to(device),
+            "u_net": nn.initialize_nn(input_size, u_output_size, params.nn_params).to(
+                device
+            ),
+            "p_net": nn.initialize_nn(input_size, p_output_size, params.nn_params).to(
+                device
+            ),
         }
         self.define_optimizers(params.learn_rate)
 
@@ -83,11 +78,9 @@ class Darcy_primal_trainer(Darcy_trainer):
         hidden_size = T.dense_net_size_heuristic(input_size, output_size)
 
         self.nets = {
-            "p_net": T.dense_nn(
-                input_size=input_size,
-                hidden_size=hidden_size,
-                output_size=output_size,
-            ).to(device)
+            "p_net": nn.initialize_nn(input_size, output_size, params.nn_params).to(
+                device
+            ),
         }
         self.define_optimizers(params.learn_rate)
 
@@ -119,7 +112,7 @@ class Darcy_primal_nn_solver(T.nn_solver):
             F.formulation_params(mesh=mesh, degree=degree)
         ).get_model_space()
 
-        p_net = nn(
+        p_net = nn.dense_nn(
             input_size=4,
             hidden_size=T.dense_net_size_heuristic(4, self.model_space.dim()),
             output_size=self.model_space.dim(),
@@ -164,14 +157,14 @@ class Darcy_dual_nn_solver(T.nn_solver):
             F.formulation_params(mesh=mesh, degree=degree)
         ).get_model_space()
 
-        self.u_net = nn(
+        self.u_net = nn.dense_nn(
             input_size=4,
             hidden_size=int((2 / 3) * (4 + self.model_space.sub(0).dim())),
             output_size=self.model_space.sub(0).dim(),
         )
         self.u_net.load_state_dict(torch.load(directory_path + "/u_net.pt"))
         self.u_net.to(device)
-        self.p_net = nn(
+        self.p_net = nn.dense_nn(
             input_size=4,
             hidden_size=int((2 / 3) * (4 + self.model_space.sub(1).dim())),
             output_size=self.model_space.sub(1).dim(),
