@@ -14,7 +14,8 @@ sys.path.append("./src/AI/")
 
 import FEM_solver as S
 import formulation as F
-import hp_tuning as H
+
+# import hp_tuning as H
 import neural_networks as nn
 import trainer as T
 
@@ -96,9 +97,16 @@ def do_train(
     train_csv.to_csv(os.path.join(output_dir, "train.csv"), index=False)
     val_csv.to_csv(os.path.join(output_dir, "val.csv"), index=False)
     print("Training nets\n")
-    nn_solver = T.nn_Factory(params).fit(
-        training_data, validation_data, params.batch_size, output_dir, verbose=verbose
+
+    nn_factory = T.get_nn_factory(params)
+    nn_solver = nn_factory.fit(
+        training_data,
+        validation_data=validation_data,
+        verbose=True,
+        save_losses=True,
+        output_dir=output_dir,
     )
+
     nn_solver.save(os.path.join(output_dir, "nets"))
     make_loss_plots(output_dir)
     return nn_solver

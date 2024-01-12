@@ -112,12 +112,13 @@ class nn_solver(ABC):
         )
 
 
-class PDE_trainer(ABC):
+class nn_factory(ABC):
     def __init__(self, params):
         if torch.cuda.is_available():
             device = torch.device("cuda")
         else:
             device = torch.device("cpu")
+        self.batch_size = params.batch_size
 
         self.data_loss = torch.nn.MSELoss()
         self.PDE_loss_type = torch.nn.MSELoss()
@@ -155,6 +156,8 @@ class PDE_trainer(ABC):
             )
         self.losses = losses
 
+        self.epochs = params.epochs
+        self.dataless = "data" not in params.losses_to_use
         return device
 
     def multiple_net_eval(self, x: torch.tensor) -> torch.tensor:
@@ -225,53 +228,44 @@ class PDE_trainer(ABC):
         for optimizer in self.optimizers.values():
             optimizer.zero_grad()
 
-
-sys.path.append("./src/AI/PDEs/")
-import Darcy_trainers as Dt
-
-
-class nn_Factory:
-    def __init__(self, params: training_params):
-        if params.formulation_params.PDE == "Darcy_primal":
-            self.trainer = Dt.Darcy_primal_trainer(params)
-        elif params.formulation_params.PDE == "Darcy_dual":
-            self.trainer = Dt.Darcy_dual_trainer(params)
+    def get_loader(self, data: list, shuffle: bool = False) -> DataLoader:
+        if self.dataless:
+            return DataLoader(
+                dataset=TensorDataset(torch.tensor(data[0])),
+                batch_size=self.batch_size,
+                shuffle=shuffle,
+            )
         else:
-            ValueError(f"The PDE {params.PDE} is not implemented")
-
-        self.epochs = params.epochs
-        self.dataless = "data" not in params.losses_to_use
+            return DataLoader(
+                dataset=TensorDataset(torch.tensor(data[0]), torch.tensor(data[1])),
+                batch_size=self.batch_size,
+                shuffle=shuffle,
+            )
 
     def fit(
         self,
         training_data: list,
-        validation_data: list,
-        batch_size: int,
-        output_dir: str,
+        validation_data: list = None,
         verbose: bool = False,
+        shuffle_data: bool = False,
+        save_losses: bool = True,
+        output_dir: str = None,
     ):
-        if self.dataless:
-            training_set = TensorDataset(torch.tensor(training_data[0]))
-            validation_set = TensorDataset(torch.tensor(validation_data[0]))
+        training_loader = self.get_loader(training_data, shuffle=shuffle_data)
+
+        if validation_data != None:
+            validation_loader = self.get_loader(training_data, shuffle=shuffle_data)
+            track_validation = True
         else:
-            training_set = TensorDataset(
-                torch.tensor(training_data[0]), torch.tensor(training_data[1])
-            )
-            validation_set = TensorDataset(
-                torch.tensor(validation_data[0]), torch.tensor(validation_data[1])
-            )
-        training_loader = DataLoader(
-            dataset=training_set, batch_size=batch_size, shuffle=False
-        )
-        validation_loader = DataLoader(
-            dataset=validation_set, batch_size=batch_size, shuffle=False
-        )
+            validation_loader = None
+            track_validation = False
 
         losses = []
         for i in range(self.epochs):
             training_loss, validation_loss = self.one_grad_descent_iter(
                 training_loader,
-                validation_loader,
+                validation_loader=validation_loader,
+                track_validation=track_validation,
             )
 
             losses.append([training_loss, validation_loss])
@@ -280,48 +274,69 @@ class nn_Factory:
                 print(f"epoch = {i+1}")
                 print(f"training loss = {training_loss}")
                 print(f"validation loss = {validation_loss}\n")
+        if save_losses:
+            pd.DataFrame(
+                [
+                    [l[0][0], l[0][1], l[0][2], l[1][0], l[1][1], l[1][2]]
+                    for l in losses
+                ],
+                columns=[
+                    "total_training",
+                    "PDE_training_loss",
+                    "Data_training_loss",
+                    "total_validation",
+                    "PDE_validation_loss",
+                    "Data_validation_loss",
+                ],
+            ).to_csv(os.path.join(output_dir, "losses.csv"), index=False)
 
-        pd.DataFrame(
-            [[l[0][0], l[0][1], l[0][2], l[1][0], l[1][1], l[1][2]] for l in losses],
-            columns=[
-                "total_training",
-                "PDE_training_loss",
-                "Data_training_loss",
-                "total_validation",
-                "PDE_validation_loss",
-                "Data_validation_loss",
-            ],
-        ).to_csv(os.path.join(output_dir, "loss.csv"), index=False)
-
-        return self.trainer.get_nn_solver()
+        return self.get_nn_solver()
 
     def one_grad_descent_iter(
         self,
-        training_loader,
-        validation_loader,
-    ):
+        training_loader: DataLoader,
+        validation_loader: DataLoader = None,
+        track_validation: bool = False,
+    ) -> list:
         training_loss = [[], [], []]
-        validation_loss = [[], [], []]
+        if track_validation:
+            validation_loss = [[], [], []]
+        else:
+            validation_loss = [[float("Nan")], [float("Nan")], [float("Nan")]]
 
-        self.trainer.train()
+        self.train()
         for batch in training_loader:
-            self.trainer.zero_grad()
-            losses = self.trainer.losses(batch)
+            self.zero_grad()
+            losses = self.losses(batch)
             total_loss = sum(losses)
             total_loss.backward()
-            self.trainer.step()
+            self.step()
             training_loss[0].append(total_loss.item())
             training_loss[1].append(losses[0].item())
             training_loss[2].append(losses[1].item())
 
-        for batch in validation_loader:
-            losses = self.trainer.losses(batch)
-            total_loss = sum(losses)
+        if track_validation:
+            for batch in validation_loader:
+                losses = self.losses(batch)
+                total_loss = sum(losses)
 
-            validation_loss[0].append(total_loss.item())
-            validation_loss[1].append(losses[0].item())
-            validation_loss[2].append(losses[1].item())
+                validation_loss[0].append(total_loss.item())
+                validation_loss[1].append(losses[0].item())
+                validation_loss[2].append(losses[1].item())
 
         return [np.array(loss).mean(axis=0) for loss in training_loss], [
             np.array(loss).mean(axis=0) for loss in validation_loss
         ]
+
+
+sys.path.append("./src/AI/PDEs/")
+import Darcy_trainers as Dt
+
+
+def get_nn_factory(params: training_params) -> nn_factory:
+    if params.formulation_params.PDE == "Darcy_primal":
+        return Dt.Darcy_primal_nn_factory(params)
+    elif params.formulation_params.PDE == "Darcy_dual":
+        return Dt.Darcy_dual_nn_factory(params)
+    else:
+        ValueError(f"The PDE {params.PDE} is not implemented")
