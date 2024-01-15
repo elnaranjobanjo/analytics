@@ -16,52 +16,29 @@ import neural_networks as nn
 
 @dataclass
 class training_params:
-    formulation_params: F.formulation_params = F.formulation_params()
-    nn_params: nn.nn_params = nn.nn_params()
-    A_matrix_params: list[list[float], list[float]] = field(
-        default_factory=lambda: [[5, 10], [5, 10]]
-    )
     epochs: int = 10
     learn_rate: float = 0.001
     losses_to_use: list[str] = field(default_factory=lambda: [["PDE"], ["data"]])
-    number_of_data_points: int = 100
-    percentage_for_validation: float = 0.2
     batch_size: int = 10
 
 
 def print_training_params(params: training_params) -> None:
-    F.print_formulation_params(params.formulation_params)
-    nn.print_neural_net_params(params.nn_params)
     print(f"Training specs:")
-    print(f"A matrix params = {params.A_matrix_params}")
     print(f"epochs = {params.epochs}")
-    print(f"learn rate = {params.learn_rate}")
+    print(f"learn_rate = {params.learn_rate}")
     print(f"losses_to_use = {params.losses_to_use}")
-    print(f"number of data points = {params.number_of_data_points}")
-    print(f"percentage set for validation = {params.percentage_for_validation}")
     print(f"batch size = {params.batch_size}\n")
 
 
-def make_training_params_dataclass(
-    formulation_dict: dict, nn_dict: dict, params_dict: dict
-) -> training_params:
-    params = training_params(
-        formulation_params=F.make_formulation_params_dataclass(formulation_dict),
-        nn_params=nn.make_nn_params_dataclass(nn_dict),
-    )
+def make_training_params_dataclass(params_dict: dict) -> training_params:
+    params = training_params()
     for key, value in params_dict.items():
-        if key == "A_matrix_params":
-            params.A_matrix_params = value
-        elif key == "epochs":
+        if key == "epochs":
             params.epochs = value
         elif key == "learn_rate":
             params.learn_rate = value
         elif key == "losses_to_use":
             params.losses_to_use = value
-        elif key == "number_of_data_points":
-            params.number_of_data_points = value
-        elif key == "percentage_for_validation":
-            params.percentage_for_validation = value
         elif key == "batch_size":
             params.batch_size = value
         else:
@@ -113,21 +90,21 @@ class nn_solver(ABC):
 
 
 class nn_factory(ABC):
-    def __init__(self, params):
+    def __init__(self, training_params: training_params):
         if torch.cuda.is_available():
             device = torch.device("cuda")
         else:
             device = torch.device("cpu")
-        self.batch_size = params.batch_size
+        self.batch_size = training_params.batch_size
 
         self.data_loss = torch.nn.MSELoss()
         self.PDE_loss_type = torch.nn.MSELoss()
 
-        if len(params.losses_to_use) > 2:
+        if len(training_params.losses_to_use) > 2:
             ValueError(
                 f"There are more than two losses, the only losses implemented are PDE and data losses"
             )
-        if "PDE" and "data" in params.losses_to_use:
+        if "PDE" and "data" in training_params.losses_to_use:
 
             def losses(batch):
                 x_batch, y_batch = batch
@@ -136,12 +113,18 @@ class nn_factory(ABC):
                     self.calculate_data_loss(x_batch, y_batch),
                 ]
 
-        elif "PDE" in params.losses_to_use and "data" not in params.losses_to_use:
+        elif (
+            "PDE" in training_params.losses_to_use
+            and "data" not in training_params.losses_to_use
+        ):
 
             def losses(batch):
                 return [self.calculate_PDE_loss(batch[0]), 0]
 
-        elif "data" in params.losses_to_use and "PDE" not in params.losses_to_use:
+        elif (
+            "data" in training_params.losses_to_use
+            and "PDE" not in training_params.losses_to_use
+        ):
 
             def losses(batch):
                 x_batch, y_batch = batch
@@ -152,12 +135,12 @@ class nn_factory(ABC):
 
         else:
             ValueError(
-                f"The losses to use {params.losses_to_use} has one type not implemented"
+                f"The losses to use {training_params.losses_to_use} has one type not implemented"
             )
         self.losses = losses
 
-        self.epochs = params.epochs
-        self.dataless = "data" not in params.losses_to_use
+        self.epochs = training_params.epochs
+        self.dataless = "data" not in training_params.losses_to_use
         return device
 
     def multiple_net_eval(self, x: torch.tensor) -> torch.tensor:
@@ -290,7 +273,7 @@ class nn_factory(ABC):
                 ],
             ).to_csv(os.path.join(output_dir, "losses.csv"), index=False)
 
-        return self.get_nn_solver()
+        return self.get_nn_solver(), losses[-1][0], losses[-1][1]
 
     def one_grad_descent_iter(
         self,
@@ -333,10 +316,16 @@ sys.path.append("./src/AI/PDEs/")
 import Darcy_trainers as Dt
 
 
-def get_nn_factory(params: training_params) -> nn_factory:
-    if params.formulation_params.PDE == "Darcy_primal":
-        return Dt.Darcy_primal_nn_factory(params)
-    elif params.formulation_params.PDE == "Darcy_dual":
-        return Dt.Darcy_dual_nn_factory(params)
+def get_nn_factory(
+    formulation_params: F.formulation_params,
+    nn_params: nn.nn_params,
+    training_params: training_params,
+) -> nn_factory:
+    if formulation_params.PDE == "Darcy_primal":
+        return Dt.Darcy_primal_nn_factory(
+            formulation_params, nn_params, training_params
+        )
+    elif formulation_params.PDE == "Darcy_dual":
+        return Dt.Darcy_dual_nn_factory(formulation_params, nn_params, training_params)
     else:
-        ValueError(f"The PDE {params.PDE} is not implemented")
+        raise ValueError(f"The PDE {formulation_params.PDE} is not implemented")
