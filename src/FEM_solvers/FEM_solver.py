@@ -5,7 +5,7 @@ import os
 import pandas as pd
 import random
 
-import formulation as F
+import src.formulations.formulation as F
 
 
 class Darcy_FEM_Solver:
@@ -111,7 +111,6 @@ def generate_data(
     val_csv = pd.DataFrame(X_val, columns=["eig_1", "eig_2", "theta"])
 
     if include_output_vals:
-        print("Generating Training Data\n")
         FEM_solver = Darcy_FEM_Solver(formulation_params)
         Y = np.array(
             list(

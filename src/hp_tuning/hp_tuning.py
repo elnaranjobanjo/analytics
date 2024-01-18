@@ -1,22 +1,20 @@
 import contextlib
 from dataclasses import dataclass, field
-import sys
 from ray import train, tune
-from ray.tune.search.bayesopt import BayesOptSearch
+from ray.tune.search.hyperopt import HyperOptSearch
 from ray.tune.search import ConcurrencyLimiter
 import os
+import torch
+import sys
 
-sys.path.append("./src/formulations/")
-sys.path.append("./src/AI/")
-
-import formulation as F
-import neural_networks as nn
-import trainer as T
+import src.formulations.formulation as F
+import src.AI.neural_networks as nn
+import src.AI.trainer as T
 
 
 @dataclass
 class hp_search_params:
-    type: str = "Bayesian"
+    type: str = "HyperOptSearch"
     max_concurrent: int = 1
     num_samples: int = 50
     time_budget_min: int = 30
@@ -67,8 +65,8 @@ def make_hp_search_params_dataclass(params_dict: dict) -> hp_search_params:
 
 
 def get_search_algorithm(params: hp_search_params):
-    if params.type == "Bayesian":
-        return BayesOptSearch()
+    if params.type == "HyperOptSearch":
+        return HyperOptSearch()
     else:
         raise ValueError(f"The search algorithm {params.type} is not implemented.")
 
@@ -100,38 +98,49 @@ def run_optimization(
     training_data: list,
     validation_data: list,
     output_dir: str,
+    verbose: bool = False,
 ) -> tune.ResultGrid:
-    search_space = {
-        "type": tune.choice(hp_params.nn_types),
-        "hidden_size_multipliers": tune.choice(hp_params.hidden_size_multipliers),
-        "num_layers": tune.choice(hp_params.num_layers),
-        "activation": tune.choice(hp_params.activations),
-    }
+    t_params = T.training_params()
 
     def objective(config):
+        torch.set_default_dtype(torch.double)
         nn_params = nn.make_nn_params_dataclass(config)
-        nn_factory = T.get_nn_factory(
-            formulation_params, nn_params, T.training_params()
-        )
+        nn_factory = T.get_nn_factory(formulation_params, nn_params, t_params)
         nn_solver, t_loss, v_loss = nn_factory.fit(
             training_data, validation_data=validation_data, save_losses=False
         )
         train.report({"score": v_loss})
 
-    with redirect_stdout_stderr_to_file(
-        os.path.join(output_dir, "ray_tune_output.txt")
-    ):
-        tuner = tune.Tuner(
-            objective,
-            tune_config=tune.TuneConfig(
-                metric="score",
-                mode="min",
-                search_alg=get_search_algorithm(hp_params),
-                num_samples=hp_params.num_samples,
-                scheduler=get_scheduler(hp_params),
-                time_budget_s=hp_params.time_budget_min * 60,
+    tuner = tune.Tuner(
+        objective,
+        tune_config=tune.TuneConfig(
+            metric="score",
+            mode="min",
+            search_alg=ConcurrencyLimiter(
+                get_search_algorithm(hp_params),
+                max_concurrent=int(hp_params.max_concurrent),
             ),
-            param_space=search_space,
-        )
-        tuner = ConcurrencyLimiter(tuner, max_concurrent=hp_params.max_concurrent)
+            num_samples=hp_params.num_samples,
+            scheduler=get_scheduler(hp_params),
+            time_budget_s=hp_params.time_budget_min * 60,
+        ),
+        run_config=train.RunConfig(
+            # local_dir="~/projects/analytics/",
+            storage_path=output_dir,
+            # name="test_experiment",
+            log_to_file=False,
+        ),
+        param_space={
+            "type": tune.choice(hp_params.nn_types),
+            "hidden_size_multiplier": tune.choice(hp_params.hidden_size_multipliers),
+            "num_layers": tune.choice(hp_params.num_layers),
+            "activation": tune.choice(hp_params.activations),
+        },
+    )
+    if verbose:
         return tuner.fit()
+    else:
+        with redirect_stdout_stderr_to_file(
+            os.path.join(output_dir, "ray_tune_output.txt")
+        ):
+            return tuner.fit()

@@ -4,8 +4,8 @@ import os
 import sys
 import torch
 
-sys.path.append("./src/")
-import engine as ng
+#sys.path.append("./src/")
+import src.engine as ng
 
 
 if __name__ == "__main__":
@@ -18,9 +18,9 @@ if __name__ == "__main__":
     with open(args.path_to_json, "r") as json_file:
         json_file = json.load(json_file)
 
-    output_dir = os.path.join(
+    output_dir = os.path.abspath(os.path.join(
         os.path.dirname(args.path_to_json), json_file["output_dir"]
-    )
+    ))
     if args.tasks == "train":
         nn_solver = ng.do_train(
             json_file["data_gen_params"],

@@ -1,7 +1,7 @@
 import fenics as fe
 import numpy as np
 
-import formulation as F
+import src.formulations.formulation as F
 
 
 def get_matrix_params_from(A: np.array) -> list:
@@ -35,7 +35,7 @@ class Darcy_dual_formulation(F.PDE_formulation):
         super().__init__()
         self.f = params.f
         self.degree = params.degree
-        self.model_space = self.define_model_space(params.mesh)
+        self.model_space = self.define_model_space(F.make_mesh(params.mesh_descr))
         (self.u, self.p) = fe.TrialFunctions(self.model_space)
         (self.v, self.q) = fe.TestFunctions(self.model_space)
         self.L = self.define_rhs()

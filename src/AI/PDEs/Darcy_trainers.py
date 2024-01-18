@@ -3,11 +3,11 @@ import numpy as np
 import torch
 import sys
 
-sys.path.append("./src/AI/")
+#sys.path.append("./src/AI/")
 
-import trainer as T
-import formulation as F
-import neural_networks as nn
+import src.AI.trainer as T
+import src.formulations.formulation as F
+import src.AI.neural_networks as nn
 
 
 class Darcy_nn_factory(T.nn_factory):

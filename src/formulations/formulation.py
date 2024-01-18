@@ -1,12 +1,12 @@
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from abc import ABC
+from dataclasses import dataclass, field
 import fenics as fe
 
 
 @dataclass
 class formulation_params:
     PDE: str = "Darcy_primal"
-    mesh: fe.Mesh = fe.UnitSquareMesh(10, 10)
+    mesh_descr: str = "unitSquare10"
     degree: int = 1
     f: str = "10"
 
@@ -23,18 +23,22 @@ def make_formulation_params_dataclass(params_dict: dict) -> formulation_params:
     for key, value in params_dict.items():
         if key == "PDE":
             params.PDE = value
-        elif key == "mesh":
-            if value[0] == "unit_square":
-                params.mesh = fe.UnitSquareMesh(value[1], value[1])
-            else:
-                raise ValueError(f"The mesh type {value[0]} is not implemented")
+        elif key == "mesh_descr":
+            params.mesh_descr = value
         elif key == "degree":
             params.degree = value
         elif key == "f":
             params.f = value
         else:
-            raise ValueError(f"The key {key} is not a formulation")
+            raise ValueError(f"The key {key} is not a formulation parameter.")
     return params
+
+
+def make_mesh(mesh_descr: str) -> fe.Mesh:
+    if mesh_descr == "unitSquare10":
+        return fe.UnitSquareMesh(10, 10)
+    else:
+        raise ValueError(f"The mesh {mesh_descr} is not implemented")
 
 
 class PDE_formulation(ABC):
@@ -51,8 +55,8 @@ class PDE_formulation(ABC):
         return self.model_space
 
 
-import sys
+# import sys
 
-sys.path.append("./src/formulations/PDEs/")
+# sys.path.append("./src/formulations/PDEs/")
 
-import Darcy as D
+import src.formulations.PDEs.Darcy as D

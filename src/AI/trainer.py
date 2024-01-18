@@ -10,15 +10,15 @@ import os
 import pandas as pd
 import sys
 
-import formulation as F
-import neural_networks as nn
+import src.formulations.formulation as F
+import src.AI.neural_networks as nn
 
 
 @dataclass
 class training_params:
     epochs: int = 10
     learn_rate: float = 0.001
-    losses_to_use: list[str] = field(default_factory=lambda: [["PDE"], ["data"]])
+    losses_to_use: list[str] = field(default_factory=lambda: ["PDE", "data"])
     batch_size: int = 10
 
 
@@ -273,7 +273,7 @@ class nn_factory(ABC):
                 ],
             ).to_csv(os.path.join(output_dir, "losses.csv"), index=False)
 
-        return self.get_nn_solver(), losses[-1][0], losses[-1][1]
+        return self.get_nn_solver(), losses[-1][0][0], losses[-1][1][0]
 
     def one_grad_descent_iter(
         self,
@@ -312,8 +312,8 @@ class nn_factory(ABC):
         ]
 
 
-sys.path.append("./src/AI/PDEs/")
-import Darcy_trainers as Dt
+# sys.path.append("./src/AI/PDEs/")
+import src.AI.PDEs.Darcy_trainers as Dt
 
 
 def get_nn_factory(
