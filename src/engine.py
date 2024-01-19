@@ -1,7 +1,6 @@
 import json
 import matplotlib.pyplot as plt
 import os
-import pandas as pd
 import shutil
 
 import src.FEM_solvers.FEM_solver as S
@@ -9,6 +8,7 @@ import src.hp_tuning.hp_tuning as H
 import src.formulations.formulation as F
 import src.AI.neural_networks as nn
 import src.AI.trainer as T
+import src.plotting.plotting as Plt
 
 
 def do_train(
@@ -52,7 +52,7 @@ def do_train(
     )
 
     nn_solver.save(os.path.join(output_dir, "nets"))
-    make_loss_plots(output_dir)
+    Plt.make_loss_plots(output_dir)
     return nn_solver
 
 
@@ -96,19 +96,15 @@ def do_hp_tuning(
         with open(os.path.join(output_dir, "best_hp.json"), "w") as json_file:
             json.dump(results.get_best_result().config, json_file)
         print("Best hyperparameters found were: ", results.get_best_result().config)
+
+        shutil.copytree(
+            results.get_best_result().path,
+            os.path.join(output_dir, "best_trial"),
+        )
+
+        Plt.make_loss_plots(os.path.join(output_dir, "best_trial"))
+        Plt.make_hp_search_summary_plots(output_dir)
     finally:
         # Ray forcibly wants to put a copy of the output here,
         # The only way to avoid it (that I know of) is to just delete it after the fact
         shutil.rmtree(os.path.expanduser(os.path.join("~", "ray_results")))
-
-
-def make_loss_plots(output_dir: str) -> None:
-    df = pd.read_csv(os.path.join(output_dir, "losses.csv"))
-    for title in df.columns:
-        y = df[title].to_numpy()
-        plt.plot(range(1, len(y) + 1), y, color="black")
-        plt.title(title)
-        plt.xlabel("epochs")
-        plt.ylabel("loss")
-        plt.savefig(os.path.join(output_dir, title + ".png"))
-        plt.close()

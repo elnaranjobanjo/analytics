@@ -90,7 +90,7 @@ class Darcy_primal_formulation(F.PDE_formulation):
         super().__init__()
         self.f = params.f
         self.degree = params.degree
-        self.model_space = self.define_model_space(params.mesh)
+        self.model_space = self.define_model_space(F.make_mesh(params.mesh_descr))
         self.bc = self.define_bc()
         self.p = fe.TrialFunction(self.model_space)
         self.q = fe.TestFunction(self.model_space)

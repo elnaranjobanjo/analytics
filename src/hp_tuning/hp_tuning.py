@@ -9,6 +9,7 @@ import sys
 
 import src.formulations.formulation as F
 import src.AI.neural_networks as nn
+import src.plotting.plotting as Plt
 import src.AI.trainer as T
 
 
@@ -17,7 +18,7 @@ class hp_search_params:
     type: str = "HyperOptSearch"
     max_concurrent: int = 1
     num_samples: int = 50
-    time_budget_min: int = 30
+    time_budget_hrs: int = 0.5
     scheduler: str = "MedianStoppingRule"
     nn_types: list = field(default_factory=lambda: ["dense_nn"])
     hidden_size_multipliers: list = field(default_factory=lambda: [2 / 3])
@@ -30,7 +31,7 @@ def print_hp_search_params(params: hp_search_params) -> None:
     print(f"type =  {params.type}")
     print(f"max_concurrent = {params.max_concurrent}")
     print(f"num_samples = {params.num_samples}")
-    print(f"time_budget_min = {params.time_budget_min}")
+    print(f"time_budget_hrs = {params.time_budget_hrs}")
     print(f"scheduler = {params.scheduler}")
     print(f"nn_types = {params.nn_types}")
     print(f"hidden_size_multipliers = {params.hidden_size_multipliers}")
@@ -47,8 +48,8 @@ def make_hp_search_params_dataclass(params_dict: dict) -> hp_search_params:
             params.max_concurrent = value
         elif key == "num_samples":
             params.num_samples = value
-        elif key == "time_budget_min":
-            params.time_budget_min = value
+        elif key == "time_budget_hrs":
+            params.time_budget_hrs = value
         elif key == "scheduler":
             params.scheduler = value
         elif key == "nn_types":
@@ -100,15 +101,20 @@ def run_optimization(
     output_dir: str,
     verbose: bool = False,
 ) -> tune.ResultGrid:
-    t_params = T.training_params()
+    t_params = T.training_params(epochs=50)
 
     def objective(config):
         torch.set_default_dtype(torch.double)
         nn_params = nn.make_nn_params_dataclass(config)
         nn_factory = T.get_nn_factory(formulation_params, nn_params, t_params)
+        trial_dir = train.get_context().get_trial_dir()
         nn_solver, t_loss, v_loss = nn_factory.fit(
-            training_data, validation_data=validation_data, save_losses=False
+            training_data,
+            validation_data=validation_data,
+            output_dir=trial_dir,
+            save_losses=True,
         )
+        nn_solver.save(os.path.join(trial_dir, "nets"))
         train.report({"score": v_loss})
 
     tuner = tune.Tuner(
@@ -122,12 +128,12 @@ def run_optimization(
             ),
             num_samples=hp_params.num_samples,
             scheduler=get_scheduler(hp_params),
-            time_budget_s=hp_params.time_budget_min * 60,
+            time_budget_s=hp_params.time_budget_hrs * 60 * 60,
         ),
         run_config=train.RunConfig(
-            # local_dir="~/projects/analytics/",
-            storage_path=output_dir,
-            # name="test_experiment",
+            local_dir=output_dir,
+            # storage_path=output_dir,
+            name="trials",
             log_to_file=False,
         ),
         param_space={
