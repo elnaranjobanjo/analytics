@@ -1,17 +1,14 @@
 import fenics as fe
 import numpy as np
 import torch
-import sys
 
-#sys.path.append("./src/AI/")
-
-import src.AI.trainer as T
+import src.AI.nn_factory as nn_F
 import src.formulations.formulation as F
 import src.AI.neural_networks as nn
 
 
-class Darcy_nn_factory(T.nn_factory):
-    def __init__(self, training_params: T.training_params):
+class Darcy_nn_factory(nn_F.nn_factory):
+    def __init__(self, training_params: nn_F.training_params):
         device = super().__init__(training_params)
         return device, 4
 
@@ -23,7 +20,7 @@ class Darcy_nn_factory(T.nn_factory):
                     torch.from_numpy(
                         self.formulation.assemble_linear_system(x.numpy())
                     ),
-                    self.single_net_eval(x),
+                    self.nn_solver.single_net_eval(x),
                 ),
                 self.f,
             )
@@ -43,7 +40,7 @@ class Darcy_dual_nn_factory(Darcy_nn_factory):
         self,
         formulation_params: F.formulation_params,
         nn_params: nn.nn_params,
-        training_params: T.training_params,
+        training_params: nn_F.training_params,
     ):
         device, input_size = super().__init__(training_params)
         self.formulation = F.D.Darcy_dual_formulation(formulation_params)
@@ -51,16 +48,24 @@ class Darcy_dual_nn_factory(Darcy_nn_factory):
         u_output_size = self.formulation.get_model_space().sub(0).dim()
         p_output_size = self.formulation.get_model_space().sub(1).dim()
 
-        self.nets = {
-            "u_net": nn.initialize_nn(input_size, u_output_size, nn_params).to(device),
-            "p_net": nn.initialize_nn(input_size, p_output_size, nn_params).to(device),
-        }
+        self.nn_solver = Darcy_dual_nn_solver().init_from_nets(
+            {
+                "u_net": nn.initialize_nn(input_size, u_output_size, nn_params).to(
+                    device
+                ),
+                "p_net": nn.initialize_nn(input_size, p_output_size, nn_params).to(
+                    device
+                ),
+            },
+            self.formulation.get_model_space(),
+        )
+
         self.define_optimizers(training_params.learn_rate)
 
-    def get_nn_solver(self):
-        return Darcy_dual_nn_solver().init_from_nets(
-            self.nets, self.formulation.get_model_space()
-        )
+    # def get_nn_solver(self):
+    #     return Darcy_dual_nn_solver().init_from_nets(
+    #         self.nets, self.formulation.get_model_space()
+    #     )
 
 
 # Given a triplet [eig_1, eig_2, theta] the trainer class
@@ -75,25 +80,31 @@ class Darcy_primal_nn_factory(Darcy_nn_factory):
         self,
         formulation_params: F.formulation_params,
         nn_params: nn.nn_params,
-        training_params: T.training_params,
+        training_params: nn_F.training_params,
     ):
         device, input_size = super().__init__(training_params)
         self.formulation = F.D.Darcy_primal_formulation(formulation_params)
         self.f = torch.from_numpy(self.formulation.get_rhs_vector())
         output_size = self.formulation.get_model_space().dim()
 
-        self.nets = {
-            "p_net": nn.initialize_nn(input_size, output_size, nn_params).to(device),
-        }
-        self.define_optimizers(training_params.learn_rate)
-
-    def get_nn_solver(self):
-        return Darcy_primal_nn_solver().init_from_nets(
-            self.nets, self.formulation.get_model_space()
+        self.nn_solver = Darcy_primal_nn_solver().init_from_nets(
+            {
+                "p_net": nn.initialize_nn(input_size, output_size, nn_params).to(
+                    device
+                ),
+            },
+            self.formulation.get_model_space(),
         )
 
+        self.define_optimizers(training_params.learn_rate)
 
-class Darcy_primal_nn_solver(T.nn_solver):
+    # def get_nn_solver(self):
+    #     return Darcy_primal_nn_solver().init_from_nets(
+    #         self.nets, self.formulation.get_model_space()
+    #     )
+
+
+class Darcy_primal_nn_solver(nn_F.nn_solver):
     def __init__(self):
         super().__init__()
         pass
@@ -126,7 +137,7 @@ class Darcy_primal_nn_solver(T.nn_solver):
         return self
 
 
-class Darcy_dual_nn_solver(T.nn_solver):
+class Darcy_dual_nn_solver(nn_F.nn_solver):
     def __init__(self):
         super().__init__()
         pass

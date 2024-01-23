@@ -55,6 +55,39 @@ class nn_solver(ABC):
         self.model_space = model_space
         return self
 
+    def multiple_net_eval(self, x: torch.tensor) -> torch.tensor:
+        return torch.cat(
+            [
+                net(
+                    torch.cat(
+                        (
+                            torch.ones(x.shape[0], 1),
+                            x,
+                        ),
+                        dim=1,
+                    )
+                )
+                for net in self.nets.values()
+            ],
+            dim=1,
+        )
+
+    def single_net_eval(self, x):
+        return torch.cat(
+            [
+                net(
+                    torch.cat(
+                        (
+                            torch.tensor([1]),
+                            x,
+                        )
+                    )
+                )
+                for net in self.nets.values()
+            ],
+            dim=0,
+        )
+
     def save(
         self,
         directory_path: str,
@@ -143,64 +176,26 @@ class nn_factory(ABC):
         self.dataless = "data" not in training_params.losses_to_use
         return device
 
-    def multiple_net_eval(self, x: torch.tensor) -> torch.tensor:
-        return torch.cat(
-            [
-                net(
-                    torch.cat(
-                        (
-                            torch.ones(x.shape[0], 1),
-                            x,
-                        ),
-                        dim=1,
-                    )
-                )
-                for net in self.nets.values()
-            ],
-            dim=1,
-        )
-
-    def single_net_eval(self, x):
-        return torch.cat(
-            [
-                net(
-                    torch.cat(
-                        (
-                            torch.tensor([1]),
-                            x,
-                        )
-                    )
-                )
-                for net in self.nets.values()
-            ],
-            dim=0,
-        )
-
-    @abstractmethod
-    def calculate_PDE_loss(self):
-        pass
+    def get_nn_solver(self):
+        return self.nn_solver
 
     def calculate_data_loss(
         self, x_batch: torch.tensor, y_batch: torch.tensor
     ) -> torch.tensor:
         return self.data_loss(
-            self.multiple_net_eval(x_batch),
+            self.nn_solver.multiple_net_eval(x_batch),
             y_batch,
         )
 
-    @abstractmethod
-    def get_nn_solver(self):
-        pass
-
     def define_optimizers(self, learn_rate):
         self.optimizers = {}
-        for net_name, net in self.nets.items():
+        for net_name, net in self.nn_solver.nets.items():
             self.optimizers[net_name] = torch.optim.Adam(
                 net.parameters(), lr=learn_rate
             )
 
     def train(self):
-        for net in self.nets.values():
+        for net in self.nn_solver.nets.values():
             net.train()
 
     def step(self):
@@ -312,8 +307,7 @@ class nn_factory(ABC):
         ]
 
 
-# sys.path.append("./src/AI/PDEs/")
-import src.AI.PDEs.Darcy_trainers as Dt
+import src.AI.PDEs.Darcy_nn_factories as D_nn_F
 
 
 def get_nn_factory(
@@ -322,10 +316,12 @@ def get_nn_factory(
     training_params: training_params,
 ) -> nn_factory:
     if formulation_params.PDE == "Darcy_primal":
-        return Dt.Darcy_primal_nn_factory(
+        return D_nn_F.Darcy_primal_nn_factory(
             formulation_params, nn_params, training_params
         )
     elif formulation_params.PDE == "Darcy_dual":
-        return Dt.Darcy_dual_nn_factory(formulation_params, nn_params, training_params)
+        return D_nn_F.Darcy_dual_nn_factory(
+            formulation_params, nn_params, training_params
+        )
     else:
         raise ValueError(f"The PDE {formulation_params.PDE} is not implemented")

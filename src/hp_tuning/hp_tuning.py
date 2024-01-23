@@ -9,8 +9,7 @@ import sys
 
 import src.formulations.formulation as F
 import src.AI.neural_networks as nn
-import src.plotting.plotting as Plt
-import src.AI.trainer as T
+import src.AI.nn_factory as nn_F
 
 
 @dataclass
@@ -101,12 +100,12 @@ def run_optimization(
     output_dir: str,
     verbose: bool = False,
 ) -> tune.ResultGrid:
-    t_params = T.training_params(epochs=50)
+    t_params = nn_F.training_params(epochs=50)
 
     def objective(config):
         torch.set_default_dtype(torch.double)
         nn_params = nn.make_nn_params_dataclass(config)
-        nn_factory = T.get_nn_factory(formulation_params, nn_params, t_params)
+        nn_factory = nn_F.get_nn_factory(formulation_params, nn_params, t_params)
         trial_dir = train.get_context().get_trial_dir()
         nn_solver, t_loss, v_loss = nn_factory.fit(
             training_data,

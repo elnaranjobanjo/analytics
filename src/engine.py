@@ -7,7 +7,7 @@ import src.FEM_solvers.FEM_solver as S
 import src.hp_tuning.hp_tuning as H
 import src.formulations.formulation as F
 import src.AI.neural_networks as nn
-import src.AI.trainer as T
+import src.AI.nn_factory as nn_F
 import src.plotting.plotting as Plt
 
 
@@ -25,13 +25,13 @@ def do_train(
     data_gen_params = S.make_data_gen_params_dataclass(data_gen_dict)
     formulation_params = F.make_formulation_params_dataclass(formulation_dict)
     nn_params = nn.make_nn_params_dataclass(nn_dict)
-    training_params = T.make_training_params_dataclass(training_dict)
+    training_params = nn_F.make_training_params_dataclass(training_dict)
 
     print("Training nets begins with the following parameters\n")
     S.print_data_gen_params(data_gen_params)
     F.print_formulation_params(formulation_params)
     nn.print_neural_net_params(nn_params)
-    T.print_training_params(training_params)
+    nn_F.print_training_params(training_params)
 
     print("Generating Training Data\n")
     training_data, validation_data = S.generate_data(
@@ -42,7 +42,7 @@ def do_train(
         save_in_csv=True,
     )
     print("Training nets\n")
-    nn_factory = T.get_nn_factory(formulation_params, nn_params, training_params)
+    nn_factory = nn_F.get_nn_factory(formulation_params, nn_params, training_params)
     nn_solver, t_loss, v_loss = nn_factory.fit(
         training_data,
         validation_data=validation_data,
