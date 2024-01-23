@@ -3,13 +3,10 @@ import fenics as fe
 import numpy as np
 import sys
 
-sys.path.append("../src/formulations/")
-sys.path.append("../src/formulations/PDEs")
-sys.path.append("../src/FEM_solvers/")
+sys.path.append("../")
 
-import formulation as F
-import FEM_solver as S
-import Darcy as D
+import src.formulations.formulation as F
+import src.FEM_solvers.FEM_solver as S
 
 
 def test_dual_convergence(
