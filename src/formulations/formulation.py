@@ -38,6 +38,8 @@ def make_formulation_params_dataclass(params_dict: dict) -> formulation_params:
 def make_mesh(mesh_descr: str) -> fe.Mesh:
     if mesh_descr == "unitSquare10":
         return fe.UnitSquareMesh(10, 10)
+    elif mesh_descr == "unitSquare5":
+        return fe.UnitSquareMesh(5, 5)
     elif os.path.exists(mesh_descr):
         return fe.Mesh(mesh_descr)
 
