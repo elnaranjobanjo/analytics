@@ -1,6 +1,7 @@
 from abc import ABC
 from dataclasses import dataclass, field
 import fenics as fe
+import os
 
 
 @dataclass
@@ -37,6 +38,9 @@ def make_formulation_params_dataclass(params_dict: dict) -> formulation_params:
 def make_mesh(mesh_descr: str) -> fe.Mesh:
     if mesh_descr == "unitSquare10":
         return fe.UnitSquareMesh(10, 10)
+    elif os.path.exists(mesh_descr):
+        return fe.Mesh(mesh_descr)
+
     else:
         raise ValueError(f"The mesh {mesh_descr} is not implemented")
 

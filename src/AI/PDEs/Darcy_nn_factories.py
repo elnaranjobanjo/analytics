@@ -1,6 +1,8 @@
 import fenics as fe
+import json
 import numpy as np
 import torch
+import os
 
 import src.AI.nn_factory as nn_F
 import src.formulations.formulation as F
@@ -62,11 +64,6 @@ class Darcy_dual_nn_factory(Darcy_nn_factory):
 
         self.define_optimizers(training_params.learn_rate)
 
-    # def get_nn_solver(self):
-    #     return Darcy_dual_nn_solver().init_from_nets(
-    #         self.nets, self.formulation.get_model_space()
-    #     )
-
 
 # Given a triplet [eig_1, eig_2, theta] the trainer class
 # trains a pair of darcy nets u,p solving
@@ -98,11 +95,6 @@ class Darcy_primal_nn_factory(Darcy_nn_factory):
 
         self.define_optimizers(training_params.learn_rate)
 
-    # def get_nn_solver(self):
-    #     return Darcy_primal_nn_solver().init_from_nets(
-    #         self.nets, self.formulation.get_model_space()
-    #     )
-
 
 class Darcy_primal_nn_solver(nn_F.nn_solver):
     def __init__(self):
@@ -121,19 +113,25 @@ class Darcy_primal_nn_solver(nn_F.nn_solver):
         return p
 
     def load(self, directory_path: str):
-        mesh, degree, device = self.load_model_space_specs(directory_path)
-        self.model_space = F.Darcy_primal_formulation(
-            F.formulation_params(mesh=mesh, degree=degree)
+        degree, device = self.load_degree_and_device(directory_path)
+        self.model_space = F.D.Darcy_primal_formulation(
+            F.formulation_params(
+                mesh_descr=os.path.join(directory_path, "mesh.xml"),
+                degree=degree,
+            )
         ).get_model_space()
 
-        p_net = nn.dense_nn(
-            input_size=4,
-            hidden_size=T.dense_net_size_heuristic(4, self.model_space.dim()),
-            output_size=self.model_space.dim(),
-        )
-        p_net.load_state_dict(torch.load(directory_path + "/p_net.pt"))
-        p_net.to(device)
-        self.nets = [p_net]
+        with open(
+            os.path.join(directory_path, "p_net_nn_params.json"), "r"
+        ) as json_file:
+            p_params_json = json.load(json_file)
+
+        self.nets = {
+            "p_net": nn.initialize_nn(
+                4, self.model_space.dim(), nn.make_nn_params_dataclass(p_params_json)
+            ).to(device),
+        }
+
         return self
 
 
@@ -166,23 +164,34 @@ class Darcy_dual_nn_solver(nn_F.nn_solver):
         return (u, p)
 
     def load(self, directory_path: str):
-        mesh, degree, device = self.load_model_space_specs(directory_path)
-        self.model_space = F.Darcy_dual_formulation(
-            F.formulation_params(mesh=mesh, degree=degree)
+        degree, device = self.load_degree_and_device(directory_path)
+        self.model_space = F.D.Darcy_dual_formulation(
+            F.formulation_params(
+                mesh_descr=os.path.join(directory_path, "mesh.xml"),
+                degree=degree,
+            )
         ).get_model_space()
 
-        self.u_net = nn.dense_nn(
-            input_size=4,
-            hidden_size=int((2 / 3) * (4 + self.model_space.sub(0).dim())),
-            output_size=self.model_space.sub(0).dim(),
-        )
-        self.u_net.load_state_dict(torch.load(directory_path + "/u_net.pt"))
-        self.u_net.to(device)
-        self.p_net = nn.dense_nn(
-            input_size=4,
-            hidden_size=int((2 / 3) * (4 + self.model_space.sub(1).dim())),
-            output_size=self.model_space.sub(1).dim(),
-        )
-        self.p_net.load_state_dict(torch.load(directory_path + "/p_net.pt"))
-        self.p_net.to(device)
+        u_output_size = self.model_space.sub(0).dim()
+        p_output_size = self.model_space.sub(1).dim()
+
+        with open(
+            os.path.join(directory_path, "u_net_nn_params.json"), "r"
+        ) as json_file:
+            u_params_json = json.load(json_file)
+
+        with open(
+            os.path.join(directory_path, "p_net_nn_params.json"), "r"
+        ) as json_file:
+            p_params_json = json.load(json_file)
+
+        self.nets = {
+            "u_net": nn.initialize_nn(
+                4, u_output_size, nn.make_nn_params_dataclass(u_params_json)
+            ).to(device),
+            "p_net": nn.initialize_nn(
+                4, p_output_size, nn.make_nn_params_dataclass(p_params_json)
+            ).to(device),
+        }
+
         return self

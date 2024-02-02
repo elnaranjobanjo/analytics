@@ -8,7 +8,6 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 import os
 import pandas as pd
-import sys
 
 import src.formulations.formulation as F
 import src.AI.neural_networks as nn
@@ -107,7 +106,9 @@ class nn_solver(ABC):
             ) as json_file:
                 json.dump(nn.nn_params_dataclass_to_dict(net.params), json_file)
 
-    def load_mesh_and_device(self, directory_path: str) -> (fe.Mesh, int, torch.device):
+    def load_degree_and_device(
+        self, directory_path: str
+    ) -> (fe.Mesh, int, torch.device):
         with open(os.path.join(directory_path, "degree.json"), "r") as json_file:
             degree_json = json.load(json_file)
 
@@ -116,7 +117,6 @@ class nn_solver(ABC):
         else:
             device = torch.device("cpu")
         return (
-            fe.Mesh(os.path.join(directory_path, "mesh.xml")),
             degree_json["degree"],
             device,
         )
