@@ -13,16 +13,84 @@ import src.AI.nn_factory as nn_F
 
 
 @dataclass
+class training_params_search_specs:
+    epochs: list = field(default_factory=lambda: [50])
+    learn_rate: list = field(default_factory=lambda: [0.001])
+    batch_size: list = field(default_factory=lambda: [100])
+
+
+def print_training_params_search_specs(params: training_params_search_specs) -> None:
+    print(f"training params search specs:")
+    print(f"epochs = {params.epochs}")
+    print(f"learn_rate = {params.learn_rate}")
+    print(f"batch_size = {params.batch_size}\n")
+
+
+def make_training_params_search_dataclass(
+    params_dict: dict,
+) -> training_params_search_specs:
+    params = training_params_search_specs()
+    for key, value in params_dict.items():
+        if key == "epochs":
+            params.epochs = value
+        elif key == "learn_rate":
+            params.learn_rate = value
+        elif key == "batch_size":
+            params.batch_size = value
+        else:
+            raise ValueError(
+                f"The parameter {key} is not a valid training param search param."
+            )
+    return params
+
+
+@dataclass
+class nn_architecture_search_specs:
+    nn_types: list = field(default_factory=lambda: ["dense_nn"])
+    hidden_size_multipliers: list = field(default_factory=lambda: [2 / 3])
+    num_layers: int = field(default_factory=lambda: [6])
+    activations: list = field(default_factory=lambda: ["GeLU"])
+
+
+def print_nn_architecture_search_specs(params: nn_architecture_search_specs) -> None:
+    print(f"nn architecture search specs:")
+    print(f"nn_types = {params.nn_types}")
+    print(f"hidden_size_multipliers = {params.hidden_size_multipliers}")
+    print(f"num_layers = {params.num_layers}")
+    print(f"activations = {params.activations}\n")
+
+
+def make_nn_architecture_dataclass(params_dict: dict) -> nn_architecture_search_specs:
+    params = nn_architecture_search_specs()
+    for key, value in params_dict.items():
+        if key == "nn_types":
+            params.nn_types = value
+        elif key == "hidden_size_multipliers":
+            params.hidden_size_multipliers = value
+        elif key == "num_layers":
+            params.num_layers = value
+        elif key == "activations":
+            params.activations = value
+        else:
+            raise ValueError(
+                f"The parameter {key} is not a valid nn architecture search param."
+            )
+    return params
+
+
+@dataclass
 class hp_search_params:
     type: str = "HyperOptSearch"
     max_concurrent: int = 1
     num_samples: int = 50
     time_budget_hrs: int = 0.5
     scheduler: str = "MedianStoppingRule"
-    nn_types: list = field(default_factory=lambda: ["dense_nn"])
-    hidden_size_multipliers: list = field(default_factory=lambda: [2 / 3])
-    num_layers: int = field(default_factory=lambda: [6])
-    activations: list = field(default_factory=lambda: ["GeLU"])
+    training_params_search_space: training_params_search_specs = (
+        training_params_search_specs()
+    )
+    nn_architecture_search_space: nn_architecture_search_space = (
+        nn_architecture_search_specs()
+    )
 
 
 def print_hp_search_params(params: hp_search_params) -> None:
@@ -31,11 +99,9 @@ def print_hp_search_params(params: hp_search_params) -> None:
     print(f"max_concurrent = {params.max_concurrent}")
     print(f"num_samples = {params.num_samples}")
     print(f"time_budget_hrs = {params.time_budget_hrs}")
-    print(f"scheduler = {params.scheduler}")
-    print(f"nn_types = {params.nn_types}")
-    print(f"hidden_size_multipliers = {params.hidden_size_multipliers}")
-    print(f"num_layers = {params.num_layers}")
-    print(f"activations = {params.activations}\n")
+    print(f"scheduler = {params.scheduler}\n")
+    print_training_params_search_specs(params.training_params_search_space)
+    print_nn_architecture_search_specs(params.nn_architecture_search_space)
 
 
 def make_hp_search_params_dataclass(params_dict: dict) -> hp_search_params:
@@ -51,16 +117,14 @@ def make_hp_search_params_dataclass(params_dict: dict) -> hp_search_params:
             params.time_budget_hrs = value
         elif key == "scheduler":
             params.scheduler = value
-        elif key == "nn_types":
-            params.nn_types = value
-        elif key == "hidden_size_multipliers":
-            params.hidden_size_multipliers = value
-        elif key == "num_layers":
-            params.num_layers = value
-        elif key == "activations":
-            params.activations = value
+        elif key == "training_params":
+            params.training_params_search_space = make_training_params_search_dataclass(
+                value
+            )
+        elif key == "nn_architecture":
+            params.nn_architecture_search_space = make_nn_architecture_dataclass(value)
         else:
-            raise ValueError(f"The parameter {key} is not a valid hp search param")
+            raise ValueError(f"The parameter {key} is not a valid hp search param.")
     return params
 
 
@@ -80,6 +144,40 @@ def get_scheduler(params: hp_search_params):
         raise ValueError(f"The search algorithm {params.type} is not implemented.")
 
 
+def define_search_space(params: hp_search_params) -> dict:
+    # return {"training_params": {}, "nn_architecture": {}}
+    return {
+        "batch_size": tune.choice(
+            range(
+                params.training_params_search_space.batch_size[0],
+                params.training_params_search_space.batch_size[1],
+            )
+        ),
+        "learn_rate": tune.loguniform(
+            params.training_params_search_space.learn_rate[0],
+            params.training_params_search_space.learn_rate[1],
+        ),
+        "epochs": tune.choice(
+            range(
+                params.training_params_search_space.epochs[0],
+                params.training_params_search_space.epochs[1],
+            )
+        ),
+        "type": tune.choice(params.nn_architecture_search_space.nn_types),
+        "hidden_size_multiplier": tune.uniform(
+            params.nn_architecture_search_space.hidden_size_multipliers[0],
+            params.nn_architecture_search_space.hidden_size_multipliers[1],
+        ),
+        "num_layers": tune.choice(
+            range(
+                params.nn_architecture_search_space.num_layers[0],
+                params.nn_architecture_search_space.num_layers[1],
+            )
+        ),
+        "activation": tune.choice(params.nn_architecture_search_space.activations),
+    }
+
+
 @contextlib.contextmanager
 def redirect_stdout_stderr_to_file(file_path):
     with open(file_path, "a") as f:
@@ -94,17 +192,19 @@ def redirect_stdout_stderr_to_file(file_path):
 
 def run_optimization(
     formulation_params: F.formulation_params,
+    training_params: nn_F.training_params,
     hp_params: hp_search_params,
     training_data: list,
     validation_data: list,
     output_dir: str,
     verbose: bool = False,
 ) -> tune.ResultGrid:
-    t_params = nn_F.training_params(epochs=50)
-
     def objective(config):
         torch.set_default_dtype(torch.double)
-        nn_params = nn.make_nn_params_dataclass(config)
+        t_params = nn_F.make_training_params_dataclass(
+            config, replace_from=training_params, raise_err=False
+        )
+        nn_params = nn.make_nn_params_dataclass(config, raise_err=False)
         nn_factory = nn_F.get_nn_factory(formulation_params, nn_params, t_params)
         trial_dir = train.get_context().get_trial_dir()
         nn_solver, t_loss, v_loss = nn_factory.fit(
@@ -135,12 +235,7 @@ def run_optimization(
             name="trials",
             log_to_file=False,
         ),
-        param_space={
-            "type": tune.choice(hp_params.nn_types),
-            "hidden_size_multiplier": tune.choice(hp_params.hidden_size_multipliers),
-            "num_layers": tune.choice(hp_params.num_layers),
-            "activation": tune.choice(hp_params.activations),
-        },
+        param_space=define_search_space(hp_params),
     )
     if verbose:
         return tuner.fit()

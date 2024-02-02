@@ -4,7 +4,7 @@ import os
 import sys
 import torch
 
-#sys.path.append("./src/")
+# sys.path.append("./src/")
 import src.engine as ng
 
 
@@ -18,9 +18,9 @@ if __name__ == "__main__":
     with open(args.path_to_json, "r") as json_file:
         json_file = json.load(json_file)
 
-    output_dir = os.path.abspath(os.path.join(
-        os.path.dirname(args.path_to_json), json_file["output_dir"]
-    ))
+    output_dir = os.path.abspath(
+        os.path.join(os.path.dirname(args.path_to_json), json_file["output_dir"])
+    )
     if args.tasks == "train":
         nn_solver = ng.do_train(
             json_file["data_gen_params"],
@@ -34,6 +34,7 @@ if __name__ == "__main__":
         ng.do_hp_tuning(
             json_file["data_gen_params"],
             json_file["formulation_params"],
+            json_file["training_params"],
             json_file["hp_search"],
             output_dir,
             verbose=True,

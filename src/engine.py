@@ -59,6 +59,7 @@ def do_train(
 def do_hp_tuning(
     data_gen_dict: dict,
     formulation_dict: dict,
+    training_dict: dict,
     hp_dict: dict,
     output_dir: str,
     verbose=False,
@@ -67,11 +68,13 @@ def do_hp_tuning(
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     formulation_params = F.make_formulation_params_dataclass(formulation_dict)
+
     data_gen_params = S.make_data_gen_params_dataclass(data_gen_dict)
     hp_params = H.make_hp_search_params_dataclass(hp_dict)
     print("hyperparameter search begins with the following parameters\n")
     F.print_formulation_params(formulation_params)
     S.print_data_gen_params(data_gen_params)
+    print(f"Training losses: {training_dict['losses_to_use']}\n")
     H.print_hp_search_params(hp_params)
 
     print("Generating Training Data\n")
@@ -84,26 +87,41 @@ def do_hp_tuning(
     )
 
     print("Starting hp search\n")
+    max_concurrent = hp_params.max_concurrent
     try:
-        results = H.run_optimization(
-            formulation_params,
-            hp_params,
-            training_data,
-            validation_data,
-            output_dir,
-            verbose=verbose,
-        )
-        with open(os.path.join(output_dir, "best_hp.json"), "w") as json_file:
-            json.dump(results.get_best_result().config, json_file)
-        print("Best hyperparameters found were: ", results.get_best_result().config)
+        for i in range(max_concurrent, 0, -1):
+            try:
+                print(f"Searching with {i} concurrent processes\n")
+                hp_params.max_concurrent = i
+                results = H.run_optimization(
+                    formulation_params,
+                    nn_F.make_training_params_dataclass(training_dict),
+                    hp_params,
+                    training_data,
+                    validation_data,
+                    output_dir,
+                    verbose=verbose,
+                )
+                with open(os.path.join(output_dir, "best_hp.json"), "w") as json_file:
+                    json.dump(results.get_best_result().config, json_file)
+                print(
+                    "Best hyperparameters found were: ",
+                    results.get_best_result().config,
+                )
 
-        shutil.copytree(
-            results.get_best_result().path,
-            os.path.join(output_dir, "best_trial"),
-        )
+                shutil.copytree(
+                    results.get_best_result().path,
+                    os.path.join(output_dir, "best_trial"),
+                )
 
-        Plt.make_loss_plots(os.path.join(output_dir, "best_trial"))
-        Plt.make_hp_search_summary_plots(output_dir)
+                Plt.make_loss_plots(os.path.join(output_dir, "best_trial"))
+                Plt.make_hp_search_summary_plots(output_dir)
+                break
+            except:
+                print(f"Hp search failed with {i} concurrent processes\n")
+                if i == 1:
+                    shutil.rmtree(os.path.join(output_dir, "trials"))
+                continue
     finally:
         # Ray forcibly wants to put a copy of the output here,
         # The only way to avoid it (that I know of) is to just delete it after the fact

@@ -29,8 +29,10 @@ def print_training_params(params: training_params) -> None:
     print(f"batch size = {params.batch_size}\n")
 
 
-def make_training_params_dataclass(params_dict: dict) -> training_params:
-    params = training_params()
+def make_training_params_dataclass(
+    params_dict: dict, replace_from=training_params(), raise_err=True
+) -> training_params:
+    params = replace_from
     for key, value in params_dict.items():
         if key == "epochs":
             params.epochs = value
@@ -41,7 +43,8 @@ def make_training_params_dataclass(params_dict: dict) -> training_params:
         elif key == "batch_size":
             params.batch_size = value
         else:
-            raise ValueError(f"The key {key} is not a training parameter")
+            if raise_err:
+                raise ValueError(f"The key {key} is not a training parameter")
     return params
 
 

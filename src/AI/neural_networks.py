@@ -18,7 +18,7 @@ def print_neural_net_params(params: nn_params) -> None:
     print(f"activation = {params.activation}\n")
 
 
-def make_nn_params_dataclass(params_dict: dict) -> nn_params:
+def make_nn_params_dataclass(params_dict: dict, raise_err=True) -> nn_params:
     params = nn_params()
     for key, value in params_dict.items():
         if key == "type":
@@ -30,7 +30,8 @@ def make_nn_params_dataclass(params_dict: dict) -> nn_params:
         elif key == "activation":
             params.activation = value
         else:
-            raise ValueError(f"The entry {key} is not a valid nn parameter")
+            if raise_err:
+                raise ValueError(f"The entry {key} is not a valid nn parameter")
     return params
 
 
