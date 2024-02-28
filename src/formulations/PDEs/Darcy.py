@@ -70,20 +70,6 @@ class Darcy_dual_formulation(F.PDE_formulation):
     def get_rhs_vector(self) -> np.array:
         return fe.assemble(self.L).get_local()
 
-    def compute_multiple_actions_on(
-        self, X: np.array, A_matrix_params: np.array
-    ) -> np.array:
-        return np.transpose(
-            np.array(
-                list(
-                    map(
-                        lambda x: self.compute_single_action_on(*x),
-                        zip(X, A_matrix_params),
-                    )
-                )
-            )
-        )
-
     def compute_single_action_on(
         self, X: np.array, A_matrix_params: np.array
     ) -> np.array:
@@ -142,6 +128,16 @@ class Darcy_primal_formulation(F.PDE_formulation):
             )
 
         return fe.DirichletBC(self.model_space, fe.Constant(0.0), boundary)
+
+    def compute_single_action_on(
+        self, X: np.array, A_matrix_params: np.array
+    ) -> np.array:
+        # Its unclear how fenics treats the Dirichlet boundary
+        # a = self.bc.apply(self.define_linear_system(get_A_matrix_from(A_matrix_params)))
+        a = self.define_linear_system(get_A_matrix_from(A_matrix_params))
+        x = fe.Function(self.model_space)
+        x.vector()[:] = X
+        return fe.assemble(fe.action(a, x))
 
     def assemble_linear_system(self, A_matrix_params: list) -> np.array:
         A = fe.assemble(self.define_linear_system(get_A_matrix_from(A_matrix_params)))
