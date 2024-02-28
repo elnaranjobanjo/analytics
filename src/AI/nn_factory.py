@@ -124,6 +124,14 @@ class nn_solver(ABC):
             device,
         )
 
+    def train(self):
+        for net in self.nets.values():
+            net.train()
+
+    def eval_mode(self):
+        for net in self.nets.values():
+            net.eval()
+
 
 class nn_factory(ABC):
     def __init__(self, training_params: training_params):
@@ -198,8 +206,7 @@ class nn_factory(ABC):
             )
 
     def train(self):
-        for net in self.nn_solver.nets.values():
-            net.train()
+        self.nn_solver.train()
 
     def step(self):
         for optimizer in self.optimizers.values():
@@ -311,6 +318,15 @@ class nn_factory(ABC):
 
 
 import src.AI.PDEs.Darcy_nn_factories as D_nn_F
+
+
+def load_nn_solver(output_dir: str, formulation: str) -> nn_solver:
+    if formulation == "Darcy_primal":
+        return D_nn_F.Darcy_primal_nn_solver().load(output_dir)
+    elif formulation == "Darcy_dual":
+        return D_nn_F.Darcy_dual_nn_solver().load(output_dir)
+    else:
+        raise ValueError(f"The PDE {formulation} is not implemented")
 
 
 def get_nn_factory(

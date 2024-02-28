@@ -1,7 +1,9 @@
 import json
-import matplotlib.pyplot as plt
+import numpy as np
 import os
 import shutil
+from sklearn.metrics import r2_score
+import torch
 
 import src.FEM_solvers.FEM_solver as S
 import src.hp_tuning.hp_tuning as H
@@ -92,30 +94,44 @@ def do_hp_tuning(
         for i in range(max_concurrent, 0, -1):
             try:
                 print(f"Searching with {i} concurrent processes\n")
-                hp_params.max_concurrent = i
-                results = H.run_optimization(
-                    formulation_params,
-                    nn_F.make_training_params_dataclass(training_dict),
-                    hp_params,
-                    training_data,
-                    validation_data,
+                # hp_params.max_concurrent = i
+                # results = H.run_optimization(
+                #     formulation_params,
+                #     nn_F.make_training_params_dataclass(training_dict),
+                #     hp_params,
+                #     training_data,
+                #     validation_data,
+                #     output_dir,
+                #     verbose=verbose,
+                # )
+                # with open(os.path.join(output_dir, "best_hp.json"), "w") as json_file:
+                #     json.dump(results.get_best_result().config, json_file)
+                # print(
+                #     "Best hyperparameters found were: ",
+                #     results.get_best_result().config,
+                # )
+
+                # shutil.copytree(
+                #     results.get_best_result().path,
+                #     os.path.join(output_dir, "best_trial"),
+                # )
+
+                # Plt.make_loss_plots(os.path.join(output_dir, "best_trial"))
+
+                nn_solver = nn_F.load_nn_solver(
+                    os.path.join(output_dir, "best_trial", "nets"),
+                    formulation_params.PDE,
+                )
+                # torch.nn.MSELoss()
+                Plt.make_hp_search_summary_plots(
                     output_dir,
-                    verbose=verbose,
-                )
-                with open(os.path.join(output_dir, "best_hp.json"), "w") as json_file:
-                    json.dump(results.get_best_result().config, json_file)
-                print(
-                    "Best hyperparameters found were: ",
-                    results.get_best_result().config,
-                )
-
-                shutil.copytree(
-                    results.get_best_result().path,
-                    os.path.join(output_dir, "best_trial"),
-                )
-
-                Plt.make_loss_plots(os.path.join(output_dir, "best_trial"))
-                Plt.make_hp_search_summary_plots(output_dir)
+                    r2_score(
+                        np.array(test_data[1]),
+                        nn_solver.multiple_net_eval(torch.tensor(test_data[0]))
+                        .detach()
+                        .numpy(),
+                    ),
+                ),
                 break
             except:
                 print(f"Hp search failed with {i} concurrent processes\n")

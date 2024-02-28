@@ -16,7 +16,7 @@ def make_loss_plots(output_dir: str) -> None:
         plt.close()
 
 
-def make_hp_search_summary_plots(output_dir: str) -> None:
+def make_hp_search_summary_plots(output_dir: str, test_score: float) -> None:
     losses = []
     max_epochs = 0
     for dir in os.listdir(os.path.join(output_dir, "trials")):
@@ -44,5 +44,13 @@ def make_hp_search_summary_plots(output_dir: str) -> None:
         plt.title(title)
         plt.xlabel("epochs")
         plt.ylabel("loss")
+        plt.text(
+            0.95,
+            0.95,
+            f"test r2: {test_score}",
+            ha="right",
+            va="top",
+            transform=plt.gca().transAxes,
+        )
         plt.savefig(os.path.join(output_dir, "summary_" + title + ".png"))
         plt.close()
