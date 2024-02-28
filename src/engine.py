@@ -34,7 +34,7 @@ def do_train(
     nn_F.print_training_params(training_params)
 
     print("Generating Training Data\n")
-    training_data, validation_data = S.generate_data(
+    [training_data, validation_data] = S.generate_data(
         data_gen_params,
         formulation_params,
         output_dir=output_dir,
@@ -78,7 +78,7 @@ def do_hp_tuning(
     H.print_hp_search_params(hp_params)
 
     print("Generating Training Data\n")
-    training_data, validation_data = S.generate_data(
+    [training_data, validation_data, test_data] = S.generate_data(
         data_gen_params,
         formulation_params,
         output_dir=output_dir,

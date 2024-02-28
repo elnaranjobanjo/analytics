@@ -51,27 +51,21 @@ class Darcy_FEM_Solver:
 
 @dataclass
 class data_gen_params:
-    number_of_data_points: int = 100
-    percentage_for_validation: float = 0.2
+    num_data_points: dict = ({"training": 100, "validation": 50},)
     A_matrix_params: list = field(default_factory=lambda: [[5, 10], [5, 10]])
-    formulation_params: F.formulation_params = F.formulation_params()
-    include_output_vals: bool = True
 
 
 def print_data_gen_params(params: data_gen_params):
     print(f"Data generation specs:")
-    print(f"number_of_data_points = {params.number_of_data_points}")
-    print(f"percentage_for_validation = {params.percentage_for_validation}")
+    print(f"number_of_data_points = {params.num_data_points}")
     print(f"A_matrix_params = {params.A_matrix_params}\n")
 
 
 def make_data_gen_params_dataclass(params_dict: dict) -> data_gen_params:
     params = data_gen_params()
     for key, value in params_dict.items():
-        if key == "number_of_data_points":
-            params.number_of_data_points = value
-        elif key == "percentage_for_validation":
-            params.percentage_for_validation = value
+        if key == "num_data_points":
+            params.num_data_points = value
         elif key == "A_matrix_params":
             params.A_matrix_params = value
         else:
@@ -85,68 +79,52 @@ def generate_data(
     output_dir: str = None,
     include_output_vals: bool = True,
     save_in_csv: bool = True,
-) -> (list, list):
-    generated_A_matrix_params = [
-        [
-            random.uniform(
-                gen_params.A_matrix_params[0][0], gen_params.A_matrix_params[0][1]
-            ),
-            random.uniform(
-                gen_params.A_matrix_params[1][0], gen_params.A_matrix_params[1][1]
-            ),
-            random.uniform(0, 2 * np.pi),
+):
+    output_data = []
+    for data_use_type, number_of_data_points in gen_params.num_data_points.items():
+        X = [
+            [
+                random.uniform(
+                    gen_params.A_matrix_params[0][0], gen_params.A_matrix_params[0][1]
+                ),
+                random.uniform(
+                    gen_params.A_matrix_params[1][0], gen_params.A_matrix_params[1][1]
+                ),
+                random.uniform(0, 2 * np.pi),
+            ]
+            for _ in range(number_of_data_points)
         ]
-        for _ in range(gen_params.number_of_data_points)
-    ]
-    split_index = int(
-        gen_params.percentage_for_validation * len(generated_A_matrix_params)
-    )
 
-    X_train, X_val = (
-        generated_A_matrix_params[split_index:],
-        generated_A_matrix_params[:split_index],
-    )
+        csv = pd.DataFrame(X, columns=["eig_1", "eig_2", "theta"])
 
-    train_csv = pd.DataFrame(X_train, columns=["eig_1", "eig_2", "theta"])
-    val_csv = pd.DataFrame(X_val, columns=["eig_1", "eig_2", "theta"])
-
-    if include_output_vals:
-        FEM_solver = Darcy_FEM_Solver(formulation_params)
-        Y = np.array(
-            list(
-                map(
-                    lambda x: FEM_solver.compute_solution_eig_rep(x),
-                    generated_A_matrix_params,
+        if include_output_vals:
+            FEM_solver = Darcy_FEM_Solver(formulation_params)
+            Y = np.array(
+                list(
+                    map(
+                        lambda x: FEM_solver.compute_solution_eig_rep(x),
+                        X,
+                    )
                 )
             )
-        )
 
-        Y_train, Y_val = (
-            Y[split_index:],
-            Y[:split_index],
-        )
-        training_data = [X_train, Y_train]
-        validation_data = [X_val, Y_val]
+            data = [X, Y]
+            column_labels = make_column_labels(
+                formulation_params.PDE,
+                FEM_solver.formulation.get_model_space(),
+            )
 
-        column_labels = make_column_labels(
-            formulation_params.PDE,
-            FEM_solver.formulation.get_model_space(),
-        )
+            Y_csv = pd.DataFrame(Y, columns=column_labels)
 
-        Y_train_csv = pd.DataFrame(Y_train, columns=column_labels)
-        Y_val_csv = pd.DataFrame(Y_val, columns=column_labels)
+            csv = pd.concat([csv, Y_csv], axis=1)
+        else:
+            data = [X]
 
-        train_csv = pd.concat([train_csv, Y_train_csv], axis=1)
-        val_csv = pd.concat([val_csv, Y_val_csv], axis=1)
-    else:
-        training_data = [X_train]
-        validation_data = [X_val]
+        output_data.append(data)
+        if save_in_csv:
+            csv.to_csv(os.path.join(output_dir, data_use_type + ".csv"), index=False)
 
-    if save_in_csv:
-        train_csv.to_csv(os.path.join(output_dir, "train.csv"), index=False)
-        val_csv.to_csv(os.path.join(output_dir, "val.csv"), index=False)
-
-    return training_data, validation_data
+    return output_data
 
 
 def make_column_labels(PDE: str, model_space: fe.FunctionSpace) -> list:
