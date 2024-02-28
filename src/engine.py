@@ -94,29 +94,29 @@ def do_hp_tuning(
         for i in range(max_concurrent, 0, -1):
             try:
                 print(f"Searching with {i} concurrent processes\n")
-                # hp_params.max_concurrent = i
-                # results = H.run_optimization(
-                #     formulation_params,
-                #     nn_F.make_training_params_dataclass(training_dict),
-                #     hp_params,
-                #     training_data,
-                #     validation_data,
-                #     output_dir,
-                #     verbose=verbose,
-                # )
-                # with open(os.path.join(output_dir, "best_hp.json"), "w") as json_file:
-                #     json.dump(results.get_best_result().config, json_file)
-                # print(
-                #     "Best hyperparameters found were: ",
-                #     results.get_best_result().config,
-                # )
+                hp_params.max_concurrent = i
+                results = H.run_optimization(
+                    formulation_params,
+                    nn_F.make_training_params_dataclass(training_dict),
+                    hp_params,
+                    training_data,
+                    validation_data,
+                    output_dir,
+                    verbose=verbose,
+                )
+                with open(os.path.join(output_dir, "best_hp.json"), "w") as json_file:
+                    json.dump(results.get_best_result().config, json_file)
+                print(
+                    "Best hyperparameters found were: ",
+                    results.get_best_result().config,
+                )
 
-                # shutil.copytree(
-                #     results.get_best_result().path,
-                #     os.path.join(output_dir, "best_trial"),
-                # )
+                shutil.copytree(
+                    results.get_best_result().path,
+                    os.path.join(output_dir, "best_trial"),
+                )
 
-                # Plt.make_loss_plots(os.path.join(output_dir, "best_trial"))
+                Plt.make_loss_plots(os.path.join(output_dir, "best_trial"))
 
                 nn_solver = nn_F.load_nn_solver(
                     os.path.join(output_dir, "best_trial", "nets"),
