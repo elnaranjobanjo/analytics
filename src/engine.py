@@ -1,5 +1,6 @@
 import json
 import numpy as np
+import pandas as pd
 import os
 import shutil
 from sklearn.metrics import r2_score
@@ -117,20 +118,16 @@ def do_hp_tuning(
                 )
 
                 Plt.make_loss_plots(os.path.join(output_dir, "best_trial"))
-
                 nn_solver = nn_F.load_nn_solver(
                     os.path.join(output_dir, "best_trial", "nets"),
                     formulation_params.PDE,
                 )
-                # torch.nn.MSELoss()
+
+                mse_loss = torch.nn.MSELoss()
                 Plt.make_hp_search_summary_plots(
                     output_dir,
-                    r2_score(
-                        np.array(test_data[1]),
-                        nn_solver.multiple_net_eval(torch.tensor(test_data[0]))
-                        .detach()
-                        .numpy(),
-                    ),
+                    nn_solver.multiple_net_eval(torch.tensor(test_data[0])).detach(),
+                    test_data,
                 ),
                 break
             except:
@@ -142,3 +139,41 @@ def do_hp_tuning(
         # Ray forcibly wants to put a copy of the output here,
         # The only way to avoid it (that I know of) is to just delete it after the fact
         shutil.rmtree(os.path.expanduser(os.path.join("~", "ray_results")))
+
+    # test_ = pd.read_csv(output_dir + "/test.csv").to_numpy()
+    # test_data = [test_[:, :3], test_[:, 3:]]
+
+    # nn_solver = nn_F.load_nn_solver(
+    #     os.path.join(output_dir, "best_trial", "nets"),
+    #     formulation_params.PDE,
+    # )
+    # # torch.nn.MSELoss()
+    # print(f"{test_data[0] = }")
+    # print(f"{test_data[1] = }")
+    # evaluations_test = nn_solver.multiple_net_eval(torch.tensor(test_data[0])).detach()
+    # print(f"{evaluations_test = }")
+    # print(f"{evaluations_test.shape = }")
+    # print(f"{test_data[1].shape = }")
+    # csv = pd.DataFrame(
+    #     evaluations_test,
+    # )
+
+    # csv.to_csv(output_dir + "/test_preds.csv")
+
+    # test_r2 = r2_score(
+    #     np.array(test_data[1]),
+    #     evaluations_test.numpy(),
+    # )
+    # print(f"{test_r2 = }")
+    # loss = torch.nn.MSELoss()
+    # test_mse = loss(torch.tensor(test_data[1]), evaluations_test)
+    # print(f"{test_mse = }")
+
+    # training_data =
+    # [training_data, validation_data, test_data] = S.generate_data(
+    #     data_gen_params,
+    #     formulation_params,
+    #     output_dir=output_dir,
+    #     include_output_vals=True,
+    #     save_in_csv=True,
+    # )

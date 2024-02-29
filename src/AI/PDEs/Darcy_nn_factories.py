@@ -112,6 +112,9 @@ class Darcy_primal_nn_solver(nn_F.nn_solver):
                 4, self.model_space.dim(), nn.make_nn_params_dataclass(p_params_json)
             ).to(device),
         }
+        self.nets["p_net"].load_state_dict(
+            torch.load(os.path.join(directory_path, "p_net.pt"))
+        )
 
         return self
 
@@ -174,5 +177,11 @@ class Darcy_dual_nn_solver(nn_F.nn_solver):
                 4, p_output_size, nn.make_nn_params_dataclass(p_params_json)
             ).to(device),
         }
+        self.nets["u_net"].load_state_dict(
+            torch.load(os.path.join(directory_path, "u_net.pt"))
+        )
+        self.nets["p_net"].load_state_dict(
+            torch.load(os.path.join(directory_path, "p_net.pt"))
+        )
 
         return self

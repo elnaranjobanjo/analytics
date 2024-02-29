@@ -57,7 +57,10 @@ class nn_solver(ABC):
         self.model_space = model_space
         return self
 
-    def multiple_net_eval(self, x: torch.tensor) -> torch.tensor:
+    def multiple_net_eval(
+        self,
+        x: torch.tensor,
+    ) -> torch.tensor:
         return torch.cat(
             [
                 net(
@@ -109,9 +112,7 @@ class nn_solver(ABC):
             ) as json_file:
                 json.dump(nn.nn_params_dataclass_to_dict(net.params), json_file)
 
-    def load_degree_and_device(
-        self, directory_path: str
-    ) -> (fe.Mesh, int, torch.device):
+    def load_degree_and_device(self, directory_path: str) -> (int, torch.device):
         with open(os.path.join(directory_path, "degree.json"), "r") as json_file:
             degree_json = json.load(json_file)
 
