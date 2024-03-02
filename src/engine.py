@@ -138,17 +138,38 @@ def do_hp_tuning(
                     os.path.join(output_dir, "best_trial", "nets"),
                     formulation_params.PDE,
                 )
-                evals = nn_solver.multiple_net_eval(torch.tensor(test_data[0])).detach()
+                training_evals = nn_solver.multiple_net_eval(
+                    torch.tensor(training_data[0])
+                ).detach()
+                training_gt = torch.tensor(np.array(training_data[1]))
+                valid_evals = nn_solver.multiple_net_eval(
+                    torch.tensor(validation_data[0])
+                ).detach()
+                valid_gt = torch.tensor(np.array(validation_data[1]))
+                test_evals = nn_solver.multiple_net_eval(
+                    torch.tensor(test_data[0])
+                ).detach()
                 test_gt = torch.tensor(np.array(test_data[1]))
                 mse_loss = torch.nn.MSELoss()
                 summary = pd.DataFrame(
                     [
                         [
-                            r2_score(test_gt.numpy(), evals.numpy()),
-                            mse_loss(test_gt, evals).item(),
+                            r2_score(training_gt.numpy(), training_evals.numpy()),
+                            mse_loss(training_gt, training_evals).item(),
+                            r2_score(valid_gt.numpy(), valid_evals.numpy()),
+                            mse_loss(valid_gt, valid_evals).item(),
+                            r2_score(test_gt.numpy(), test_evals.numpy()),
+                            mse_loss(test_gt, test_evals).item(),
                         ]
                     ],
-                    columns=["r2", "mse"],
+                    columns=[
+                        "train_r2",
+                        "train_mse",
+                        "valid_r2",
+                        "valid_mse",
+                        "test_r2",
+                        "test_mse",
+                    ],
                 )
 
                 summary.to_csv(
