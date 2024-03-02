@@ -80,14 +80,25 @@ def do_hp_tuning(
     print(f"Training losses: {training_dict['losses_to_use']}\n")
     H.print_hp_search_params(hp_params)
 
-    print("Generating Training Data\n")
-    [training_data, validation_data, test_data] = S.generate_data(
-        data_gen_params,
-        formulation_params,
-        output_dir=output_dir,
-        include_output_vals=True,
-        save_in_csv=True,
-    )
+    if os.path.exists(os.path.join(output_dir, "test.csv")):
+        print("Loading data\n")
+        train_ = pd.read_csv(output_dir + "/training.csv").to_numpy()
+        training_data = [train_[:, :3], train_[:, 3:]]
+
+        valid_ = pd.read_csv(output_dir + "/validation.csv").to_numpy()
+        validation_data = [valid_[:, :3], valid_[:, 3:]]
+
+        test_ = pd.read_csv(output_dir + "/test.csv").to_numpy()
+        test_data = [test_[:, :3], test_[:, 3:]]
+    else:
+        print("Computing data\n")
+        [training_data, validation_data, test_data] = S.generate_data(
+            data_gen_params,
+            formulation_params,
+            output_dir=output_dir,
+            include_output_vals=True,
+            save_in_csv=True,
+        )
 
     print("Starting hp search\n")
     max_concurrent = hp_params.max_concurrent
@@ -118,16 +129,34 @@ def do_hp_tuning(
                 )
 
                 Plt.make_loss_plots(os.path.join(output_dir, "best_trial"))
+                Plt.make_hp_search_summary_plots(
+                    output_dir,
+                )
+
+                # compute summary stats
                 nn_solver = nn_F.load_nn_solver(
                     os.path.join(output_dir, "best_trial", "nets"),
                     formulation_params.PDE,
                 )
-                print("here")
-                Plt.make_hp_search_summary_plots(
-                    output_dir,
-                    nn_solver.multiple_net_eval(torch.tensor(test_data[0])).detach(),
-                    torch.tensor(np.array(test_data[1])),
+                evals = nn_solver.multiple_net_eval(torch.tensor(test_data[0])).detach()
+                test_gt = torch.tensor(np.array(test_data[1]))
+                mse_loss = torch.nn.MSELoss()
+                summary = pd.DataFrame(
+                    [
+                        [
+                            r2_score(test_gt.numpy(), evals.numpy()),
+                            mse_loss(test_gt, evals).item(),
+                        ]
+                    ],
+                    columns=["r2", "mse"],
                 )
+
+                summary.to_csv(
+                    os.path.join(output_dir, "test_summary_stats.csv"), index=False
+                )
+
+                print("Test summary Stats = /n")
+                print(summary)
                 break
             except:
                 print(f"Hp search failed with {i} concurrent processes\n")

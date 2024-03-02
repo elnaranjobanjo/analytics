@@ -19,9 +19,7 @@ def make_loss_plots(output_dir: str) -> None:
         plt.close()
 
 
-def make_hp_search_summary_plots(
-    output_dir: str, evals: torch.tensor, test_gt: torch.tensor
-) -> None:
+def make_hp_search_summary_plots(output_dir: str) -> None:
     losses = []
     max_epochs = 0
     for dir in os.listdir(os.path.join(output_dir, "trials")):
@@ -33,10 +31,6 @@ def make_hp_search_summary_plots(
 
     best = pd.read_csv(os.path.join(output_dir, "best_trial", "losses.csv"))
 
-    # compute summary stats
-    mse_loss = torch.nn.MSELoss()
-    r2 = r2_score(test_gt.numpy(), evals.numpy())
-    mse = mse_loss(test_gt, evals)
     for title in losses[0].columns:
         for loss in losses:
             plt.plot(
@@ -54,13 +48,13 @@ def make_hp_search_summary_plots(
         plt.title(title)
         plt.xlabel("epochs")
         plt.ylabel("loss")
-        plt.text(
-            0.05,
-            0.95,
-            f"test r2: {r2}, mse = {mse}",
-            ha="right",
-            va="top",
-            transform=plt.gca().transAxes,
-        )
+        # plt.text(
+        #     0.05,
+        #     0.95,
+        #     f"test r2: {r2}, mse = {mse}",
+        #     ha="right",
+        #     va="top",
+        #     transform=plt.gca().transAxes,
+        # )
         plt.savefig(os.path.join(output_dir, "summary_" + title + ".png"))
         plt.close()
