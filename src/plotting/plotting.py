@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 from sklearn.metrics import r2_score
-from sklearn.metrics import matthews_corrcoef as corre
+from sklearn.feature_selection import r_regression as corre
 import torch
 
 
@@ -32,6 +32,11 @@ def make_hp_search_summary_plots(
             max_epochs = max(max_epochs, len(losses[-1]))
 
     best = pd.read_csv(os.path.join(output_dir, "best_trial", "losses.csv"))
+
+    # compute summary stats
+    mse_loss = torch.nn.MSELoss()
+    r2 = r2_score(test_gt.numpy(), evals.numpy())
+    mse = mse_loss(test_gt, evals)
     for title in losses[0].columns:
         for loss in losses:
             plt.plot(
@@ -49,11 +54,10 @@ def make_hp_search_summary_plots(
         plt.title(title)
         plt.xlabel("epochs")
         plt.ylabel("loss")
-        mse_loss = torch.nn.MSELoss()
         plt.text(
             0.05,
             0.95,
-            f"test r2: {r2_score(test_gt.numpy(),evals.numpy())}, corr = {corre(test_gt.numpy(),evals.numpy())}, mse = {mse_loss(test_gt,evals)}",
+            f"test r2: {r2}, mse = {mse}",
             ha="right",
             va="top",
             transform=plt.gca().transAxes,

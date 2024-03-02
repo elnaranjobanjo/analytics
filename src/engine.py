@@ -122,13 +122,12 @@ def do_hp_tuning(
                     os.path.join(output_dir, "best_trial", "nets"),
                     formulation_params.PDE,
                 )
-
-                mse_loss = torch.nn.MSELoss()
+                print("here")
                 Plt.make_hp_search_summary_plots(
                     output_dir,
                     nn_solver.multiple_net_eval(torch.tensor(test_data[0])).detach(),
-                    test_data,
-                ),
+                    torch.tensor(np.array(test_data[1])),
+                )
                 break
             except:
                 print(f"Hp search failed with {i} concurrent processes\n")
