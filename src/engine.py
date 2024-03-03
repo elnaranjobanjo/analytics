@@ -6,12 +6,12 @@ import shutil
 from sklearn.metrics import r2_score
 import torch
 
+import src.diagnostic_tools.plotting as Plt
 import src.FEM_solvers.FEM_solver as S
 import src.hp_tuning.hp_tuning as H
 import src.formulations.formulation as F
 import src.AI.neural_networks as nn
 import src.AI.nn_factory as nn_F
-import src.plotting.plotting as Plt
 
 
 def do_train(
@@ -99,85 +99,36 @@ def do_hp_tuning(
             include_output_vals=True,
             save_in_csv=True,
         )
-
+    hp_search_successful = False
     print("Starting hp search\n")
     max_concurrent = hp_params.max_concurrent
     try:
         for i in range(max_concurrent, 0, -1):
             try:
                 print(f"Searching with {i} concurrent processes\n")
-                hp_params.max_concurrent = i
-                results = H.run_optimization(
-                    formulation_params,
-                    nn_F.make_training_params_dataclass(training_dict),
-                    hp_params,
-                    training_data,
-                    validation_data,
-                    output_dir,
-                    verbose=verbose,
-                )
-                with open(os.path.join(output_dir, "best_hp.json"), "w") as json_file:
-                    json.dump(results.get_best_result().config, json_file)
-                print(
-                    "Best hyperparameters found were: ",
-                    results.get_best_result().config,
-                )
+                # hp_params.max_concurrent = i
+                # results = H.run_optimization(
+                #     formulation_params,
+                #     nn_F.make_training_params_dataclass(training_dict),
+                #     hp_params,
+                #     training_data,
+                #     validation_data,
+                #     output_dir,
+                #     verbose=verbose,
+                # )
+                # with open(os.path.join(output_dir, "best_hp.json"), "w") as json_file:
+                #     json.dump(results.get_best_result().config, json_file)
+                # print(
+                #     "Best hyperparameters found were: ",
+                #     results.get_best_result().config,
+                # )
 
-                shutil.copytree(
-                    results.get_best_result().path,
-                    os.path.join(output_dir, "best_trial"),
-                )
+                # shutil.copytree(
+                #     results.get_best_result().path,
+                #     os.path.join(output_dir, "best_trial"),
+                # )
 
-                Plt.make_loss_plots(os.path.join(output_dir, "best_trial"))
-                Plt.make_hp_search_summary_plots(
-                    output_dir,
-                )
-
-                # compute summary stats
-                nn_solver = nn_F.load_nn_solver(
-                    os.path.join(output_dir, "best_trial", "nets"),
-                    formulation_params.PDE,
-                )
-                training_evals = nn_solver.multiple_net_eval(
-                    torch.tensor(training_data[0])
-                ).detach()
-                training_gt = torch.tensor(np.array(training_data[1]))
-                valid_evals = nn_solver.multiple_net_eval(
-                    torch.tensor(validation_data[0])
-                ).detach()
-                valid_gt = torch.tensor(np.array(validation_data[1]))
-                test_evals = nn_solver.multiple_net_eval(
-                    torch.tensor(test_data[0])
-                ).detach()
-                test_gt = torch.tensor(np.array(test_data[1]))
-                mse_loss = torch.nn.MSELoss()
-                summary = pd.DataFrame(
-                    [
-                        [
-                            r2_score(training_gt.numpy(), training_evals.numpy()),
-                            mse_loss(training_gt, training_evals).item(),
-                            r2_score(valid_gt.numpy(), valid_evals.numpy()),
-                            mse_loss(valid_gt, valid_evals).item(),
-                            r2_score(test_gt.numpy(), test_evals.numpy()),
-                            mse_loss(test_gt, test_evals).item(),
-                        ]
-                    ],
-                    columns=[
-                        "train_r2",
-                        "train_mse",
-                        "valid_r2",
-                        "valid_mse",
-                        "test_r2",
-                        "test_mse",
-                    ],
-                )
-
-                summary.to_csv(
-                    os.path.join(output_dir, "test_summary_stats.csv"), index=False
-                )
-
-                print("Test summary Stats = /n")
-                print(summary)
+                hp_search_successful = True
                 break
             except:
                 print(f"Hp search failed with {i} concurrent processes\n")
@@ -185,6 +136,44 @@ def do_hp_tuning(
                     shutil.rmtree(os.path.join(output_dir, "trials"))
                 continue
     finally:
+        if hp_search_successful:
+            print("Running diagnostics")
+            Plt.make_loss_plots(os.path.join(output_dir, "best_trial"))
+            Plt.make_hp_search_summary_plots(
+                output_dir,
+            )
+
+            nn_solver = nn_F.load_nn_solver(
+                os.path.join(output_dir, "best_trial", "nets"),
+                formulation_params.PDE,
+            )
+            data_types = ["training", "validation", "test"]
+            data = [training_data, validation_data, test_data]
+            summary = pd.DataFrame()
+            mse_loss = torch.nn.MSELoss()
+            for i, type in enumerate(data_types):
+                evals = nn_solver.multiple_net_eval(torch.tensor(data[i][0])).detach()
+
+                summary[type + "_" + "r2"] = [r2_score(data[i][1], evals.numpy())]
+                summary[type + "_" + "mse"] = [
+                    mse_loss(torch.tensor(data[i][1]), evals).item()
+                ]
+
+                dir = os.path.join(output_dir, "parity_plots", type)
+                if not os.path.exists(dir):
+                    os.makedirs(dir)
+
+                Plt.make_parity_plots(
+                    os.path.join(output_dir, type + ".csv"),
+                    evals.numpy(),
+                    dir,
+                )
+            print("Summary stats = ")
+            print(summary)
+            summary.to_csv(
+                os.path.join(output_dir, "test_summary_stats.csv"), index=False
+            )
+
         # Ray forcibly wants to put a copy of the output here,
         # The only way to avoid it (that I know of) is to just delete it after the fact
         shutil.rmtree(os.path.expanduser(os.path.join("~", "ray_results")))
