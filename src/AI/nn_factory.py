@@ -266,7 +266,7 @@ class nn_factory(ABC):
         training_loader = self.get_loader(training_data, shuffle=shuffle_data)
 
         if validation_data != None:
-            validation_loader = self.get_loader(training_data, shuffle=shuffle_data)
+            validation_loader = self.get_loader(validation_data, shuffle=shuffle_data)
             track_validation = True
         else:
             validation_loader = None
