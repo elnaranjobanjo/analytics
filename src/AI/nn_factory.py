@@ -141,7 +141,7 @@ class nn_factory(ABC):
             device = torch.device("cpu")
         self.batch_size = training_params.batch_size
 
-        self.data_loss = torch.nn.MSELoss()
+        self.data_loss_type = torch.nn.MSELoss()
         self.PDE_loss_type = torch.nn.MSELoss()
 
         if len(training_params.losses_to_use) > 2:
@@ -193,7 +193,7 @@ class nn_factory(ABC):
     def calculate_data_loss(
         self, x_batch: torch.tensor, y_batch: torch.tensor
     ) -> torch.tensor:
-        return self.data_loss(
+        return self.data_loss_type(
             self.nn_solver.multiple_net_eval(x_batch),
             y_batch,
         )
