@@ -1,7 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass, field
 import fenics as fe
-import numpy as np
 import os
 
 
@@ -60,20 +59,6 @@ class PDE_formulation(ABC):
 
     def get_model_space(self) -> fe.FunctionSpace:
         return self.model_space
-
-    def compute_multiple_actions_on(
-        self, X: np.array, A_matrix_params: np.array
-    ) -> np.array:
-        return np.transpose(
-            np.array(
-                list(
-                    map(
-                        lambda x: self.compute_single_action_on(*x),
-                        zip(X, A_matrix_params),
-                    )
-                )
-            )
-        )
 
 
 # import sys

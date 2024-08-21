@@ -214,6 +214,7 @@ def run_optimization(
             save_losses=True,
         )
         nn_solver.save(os.path.join(trial_dir, "nets"))
+
         train.report({"score": v_loss})
 
     tuner = tune.Tuner(

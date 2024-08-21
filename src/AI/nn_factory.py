@@ -57,10 +57,7 @@ class nn_solver(ABC):
         self.model_space = model_space
         return self
 
-    def multiple_net_eval(
-        self,
-        x: torch.tensor,
-    ) -> torch.tensor:
+    def multiple_net_eval(self, x: torch.tensor) -> torch.tensor:
         return torch.cat(
             [
                 net(
@@ -112,7 +109,9 @@ class nn_solver(ABC):
             ) as json_file:
                 json.dump(nn.nn_params_dataclass_to_dict(net.params), json_file)
 
-    def load_degree_and_device(self, directory_path: str) -> (int, torch.device):
+    def load_degree_and_device(
+        self, directory_path: str
+    ) -> (fe.Mesh, int, torch.device):
         with open(os.path.join(directory_path, "degree.json"), "r") as json_file:
             degree_json = json.load(json_file)
 
@@ -188,29 +187,6 @@ class nn_factory(ABC):
         self.dataless = "data" not in training_params.losses_to_use
         return device
 
-    def calculate_PDE_loss(self, x_batch):
-        b_2d = self.f.unsqueeze(1)
-        return self.PDE_loss_type(
-            torch.tensor(
-                self.formulation.compute_multiple_actions_on(
-                    self.nn_solver.multiple_net_eval(x_batch).detach().numpy(),
-                    x_batch.numpy(),
-                )
-            ),
-            b_2d.repeat(1, x_batch.shape[0]),
-        ).mean()
-        # loss = 0
-        # for x in x_batch:
-        #     loss += self.PDE_loss_type(
-        #         torch.tensor(
-        #             self.formulation.compute_single_action_on(
-        #                 self.nn_solver.single_net_eval(x).detach().numpy(), x.numpy()
-        #             )
-        #         ),
-        #         self.f,
-        #     )
-        # return loss.mean()
-
     def get_nn_solver(self):
         return self.nn_solver
 
@@ -231,6 +207,9 @@ class nn_factory(ABC):
 
     def train(self):
         self.nn_solver.train()
+
+    def activate_eval_mode(self):
+        self.nn_solver.eval_mode()
 
     def step(self):
         for optimizer in self.optimizers.values():
@@ -301,7 +280,7 @@ class nn_factory(ABC):
                     "Data_validation_loss",
                 ],
             ).to_csv(os.path.join(output_dir, "losses.csv"), index=False)
-
+        self.activate_eval_mode()
         return self.get_nn_solver(), losses[-1][0][0], losses[-1][1][0]
 
     def one_grad_descent_iter(

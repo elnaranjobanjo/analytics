@@ -13,7 +13,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("path_to_json", type=str, help="path_to_json", default="./")
-    parser.add_argument("-tasks", type=str, help="tasks available: train, hp_tune")
+    parser.add_argument("-tasks", type=str, help="tasks available: train, hp_search")
     args = parser.parse_args()
     with open(args.path_to_json, "r") as json_file:
         json_file = json.load(json_file)

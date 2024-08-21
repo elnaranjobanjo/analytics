@@ -37,14 +37,27 @@ def do_train(
     nn_F.print_training_params(training_params)
 
     print("Generating Training Data\n")
-    [training_data, validation_data] = S.generate_data(
-        data_gen_params,
-        formulation_params,
-        output_dir=output_dir,
-        include_output_vals=("data" in training_params.losses_to_use),
-        save_in_csv=True,
-    )
+
+    if os.path.exists(os.path.join(output_dir, "validation.csv")):
+        print("Loading data\n")
+        train_ = pd.read_csv(output_dir + "/training.csv").to_numpy()
+        training_data = [train_[:, :3], train_[:, 3:]]
+
+        valid_ = pd.read_csv(output_dir + "/validation.csv").to_numpy()
+        validation_data = [valid_[:, :3], valid_[:, 3:]]
+    else:
+        print("Computing data\n")
+        [training_data, validation_data] = S.generate_data(
+            data_gen_params,
+            formulation_params,
+            output_dir=output_dir,
+            include_output_vals=("data" in training_params.losses_to_use),
+            save_in_csv=True,
+        )
+
     print("Training nets\n")
+    # print(f"{training_data[0].shape = }")
+    # print(f"{validation_data[0].shape = }")
     nn_factory = nn_F.get_nn_factory(formulation_params, nn_params, training_params)
     nn_solver, t_loss, v_loss = nn_factory.fit(
         training_data,
@@ -56,6 +69,29 @@ def do_train(
 
     nn_solver.save(os.path.join(output_dir, "nets"))
     Plt.make_loss_plots(output_dir)
+
+    data_types = ["training", "validation"]
+    data = [training_data, validation_data]
+    summary = pd.DataFrame()
+    mse_loss = torch.nn.MSELoss()
+    for i, type in enumerate(data_types):
+        evals = nn_solver.multiple_net_eval(torch.tensor(data[i][0])).detach()
+
+        summary[type + "_" + "r2"] = [r2_score(data[i][1], evals.numpy())]
+        summary[type + "_" + "mse"] = [mse_loss(torch.tensor(data[i][1]), evals).item()]
+
+        dir = os.path.join(output_dir, "parity_plots", type)
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+
+        Plt.make_parity_plots(
+            os.path.join(output_dir, type + ".csv"),
+            evals.numpy(),
+            dir,
+        )
+    print("Summary stats = ")
+    print(summary)
+    summary.to_csv(os.path.join(output_dir, "summary_stats.csv"), index=False)
     return nn_solver
 
 
@@ -106,27 +142,27 @@ def do_hp_tuning(
         for i in range(max_concurrent, 0, -1):
             try:
                 print(f"Searching with {i} concurrent processes\n")
-                # hp_params.max_concurrent = i
-                # results = H.run_optimization(
-                #     formulation_params,
-                #     nn_F.make_training_params_dataclass(training_dict),
-                #     hp_params,
-                #     training_data,
-                #     validation_data,
-                #     output_dir,
-                #     verbose=verbose,
-                # )
-                # with open(os.path.join(output_dir, "best_hp.json"), "w") as json_file:
-                #     json.dump(results.get_best_result().config, json_file)
-                # print(
-                #     "Best hyperparameters found were: ",
-                #     results.get_best_result().config,
-                # )
+                hp_params.max_concurrent = i
+                results = H.run_optimization(
+                    formulation_params,
+                    nn_F.make_training_params_dataclass(training_dict),
+                    hp_params,
+                    training_data,
+                    validation_data,
+                    output_dir,
+                    verbose=verbose,
+                )
+                with open(os.path.join(output_dir, "best_hp.json"), "w") as json_file:
+                    json.dump(results.get_best_result().config, json_file)
+                print(
+                    "Best hyperparameters found were: ",
+                    results.get_best_result().config,
+                )
 
-                # shutil.copytree(
-                #     results.get_best_result().path,
-                #     os.path.join(output_dir, "best_trial"),
-                # )
+                shutil.copytree(
+                    results.get_best_result().path,
+                    os.path.join(output_dir, "best_trial"),
+                )
 
                 hp_search_successful = True
                 break
@@ -170,9 +206,7 @@ def do_hp_tuning(
                 )
             print("Summary stats = ")
             print(summary)
-            summary.to_csv(
-                os.path.join(output_dir, "test_summary_stats.csv"), index=False
-            )
+            summary.to_csv(os.path.join(output_dir, "summary_stats.csv"), index=False)
 
         # Ray forcibly wants to put a copy of the output here,
         # The only way to avoid it (that I know of) is to just delete it after the fact
