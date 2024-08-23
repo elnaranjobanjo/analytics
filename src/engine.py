@@ -94,7 +94,9 @@ def do_train(
             os.path.join(diagnosis_dir, f"summary_{titles[i]}.csv"), index=False
         )
         print(f"Summary {titles[i]} = \n{summary}\n")
-
+        Plt.diagnose_linear_system(
+            nn_factory.formulation, data, titles[i], diagnosis_dir
+        )
         working_dir = os.path.join(diagnosis_dir, f"{titles[i]}")
         if not os.path.exists(working_dir):
             os.makedirs(working_dir)

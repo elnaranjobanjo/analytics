@@ -198,7 +198,7 @@ class nn_factory(ABC):
             y_batch,
         )
 
-    def define_optimizers(self, learn_rate):
+    def define_optimizers(self, learn_rate: float) -> None:
         self.optimizers = {}
         for net_name, net in self.nn_solver.nets.items():
             self.optimizers[net_name] = torch.optim.Adam(

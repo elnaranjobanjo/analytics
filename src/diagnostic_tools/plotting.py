@@ -7,6 +7,8 @@ from sklearn.feature_selection import r_regression as corre
 from typing import Tuple
 import torch
 
+import src.formulations.formulation as F
+
 
 def make_loss_plots(output_dir: str) -> None:
     df = pd.read_csv(os.path.join(output_dir, "losses.csv"))
@@ -178,6 +180,39 @@ def make_PDE_parity_plots(
     ax1.set_xlabel("residuals")
     fig1.savefig(os.path.join(working_dir, f"summary_rhs_residuals.png"))
     plt.close(fig1)
+
+
+def diagnose_linear_system(
+    PDE: F.PDE_formulation, A_matrix_params: np.array, title: str, diagnostics_dir: str
+) -> None:
+    condition_nums = np.array(
+        list(
+            map(
+                lambda x: np.linalg.cond(PDE.assemble_linear_system(x)), A_matrix_params
+            )
+        )
+    )
+    plt.hist(
+        condition_nums,
+        bins=max(int(len(condition_nums) / 10), 10),
+        alpha=0.75,
+        color="blue",
+    )
+    plt.text(
+        0.05,
+        0.95,
+        f"mean = {np.mean(condition_nums):.3f}\nstd = {np.std(condition_nums):.3f}",
+        transform=plt.gca().transAxes,
+        verticalalignment="top",
+        horizontalalignment="left",
+    )
+    plt.savefig(os.path.join(diagnostics_dir, f"{title}_condition_nums.png"))
+    plt.close()
+
+    pd.DataFrame(
+        np.hstack((A_matrix_params, condition_nums.reshape(-1, 1))),
+        columns=["eig_1", "eig_2", "theta", "condition_number"],
+    ).to_csv(os.path.join(diagnostics_dir, f"{title}_condition_nums.csv"), index=False)
 
 
 # def make_PDE_parity_plots(
