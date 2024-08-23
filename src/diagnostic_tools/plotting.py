@@ -151,8 +151,16 @@ def make_PDE_parity_plots(
             color="blue",
         )
         ax2.set_title(f"Histogram f_{i}")
-        ax2.set_xlabel(f"num_f_{i}")
-        ax2.axvline(x=f_i, color="red", linestyle="--", linewidth=2)
+        ax2.set_xlabel(f"predicted f_{i}")
+        ax2.set_ylabel("frequency")
+        ax2.axvline(x=f_i, color="red", linestyle="--", linewidth=2, label="gt")
+        ax2.axvline(
+            x=np.mean(num_f),
+            color="green",
+            linestyle="--",
+            linewidth=2,
+            label="mean of preds",
+        )
         ax2.text(
             0.05,
             0.95,
@@ -161,6 +169,7 @@ def make_PDE_parity_plots(
             verticalalignment="top",
             horizontalalignment="left",
         )
+        fig2.legend()
         fig2.savefig(os.path.join(dir, f"f_{i}.png"))
         plt.close(fig2)
 

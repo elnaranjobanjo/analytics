@@ -193,7 +193,7 @@ class nn_factory(ABC):
     def calculate_data_loss(
         self, x_batch: torch.tensor, y_batch: torch.tensor
     ) -> torch.tensor:
-        return self.data_loss_type(
+        return 10000 * self.data_loss_type(
             self.nn_solver.multiple_net_eval(x_batch),
             y_batch,
         )
