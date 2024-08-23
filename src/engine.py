@@ -36,9 +36,9 @@ def do_train(
     nn.print_neural_net_params(nn_params)
     nn_F.print_training_params(training_params)
 
-    print("Generating Training Data\n")
+    print("Obtaining data\n")
 
-    if os.path.exists(os.path.join(output_dir, "validation.csv")):
+    if os.path.exists(os.path.join(output_dir, "training.csv")):
         print("Loading data\n")
         train_ = pd.read_csv(output_dir + "/training.csv").to_numpy()
         training_data = [train_[:, :3], train_[:, 3:]]
@@ -56,8 +56,6 @@ def do_train(
         )
 
     print("Training nets\n")
-    # print(f"{training_data[0].shape = }")
-    # print(f"{validation_data[0].shape = }")
     nn_factory = nn_F.get_nn_factory(formulation_params, nn_params, training_params)
     nn_solver, t_loss, v_loss = nn_factory.fit(
         training_data,
@@ -66,32 +64,121 @@ def do_train(
         save_losses=True,
         output_dir=output_dir,
     )
-
     nn_solver.save(os.path.join(output_dir, "nets"))
     Plt.make_loss_plots(output_dir)
 
-    data_types = ["training", "validation"]
-    data = [training_data, validation_data]
-    summary = pd.DataFrame()
-    mse_loss = torch.nn.MSELoss()
-    for i, type in enumerate(data_types):
-        evals = nn_solver.multiple_net_eval(torch.tensor(data[i][0])).detach()
+    data_points = [training_data[0]]
+    titles = ["training"]
+    if os.path.exists(os.path.join(output_dir, "validation.csv")):
+        data_points.append(validation_data[0])
+        titles.append("validation")
 
-        summary[type + "_" + "r2"] = [r2_score(data[i][1], evals.numpy())]
-        summary[type + "_" + "mse"] = [mse_loss(torch.tensor(data[i][1]), evals).item()]
+    print("Running diagnostics\n")
 
-        dir = os.path.join(output_dir, "parity_plots", type)
-        if not os.path.exists(dir):
-            os.makedirs(dir)
+    diagnosis_dir = os.path.join(output_dir, "diagnosis")
+    if not os.path.exists(diagnosis_dir):
+        os.makedirs(diagnosis_dir)
 
-        Plt.make_parity_plots(
-            os.path.join(output_dir, type + ".csv"),
-            evals.numpy(),
-            dir,
+    for i, data in enumerate(data_points):
+        evals = nn_solver.multiple_net_eval(torch.tensor(data)).detach().numpy()
+        evals_address = os.path.join(diagnosis_dir, f"{titles[i]}_net_evals.csv")
+        pd.DataFrame(
+            np.hstack((data, evals)),
+            columns=pd.read_csv(os.path.join(output_dir, "training.csv")).columns,
+        ).to_csv(evals_address, index=False)
+
+        gt_address = os.path.join(os.path.join(output_dir, f"{titles[i]}.csv"))
+
+        summary = Plt.run_diagnostic_stats(gt_address, evals_address)
+        summary.to_csv(
+            os.path.join(diagnosis_dir, f"summary_{titles[i]}.csv"), index=False
         )
-    print("Summary stats = ")
-    print(summary)
-    summary.to_csv(os.path.join(output_dir, "summary_stats.csv"), index=False)
+        print(f"Summary {titles[i]} = \n{summary}\n")
+
+        working_dir = os.path.join(diagnosis_dir, f"{titles[i]}")
+        if not os.path.exists(working_dir):
+            os.makedirs(working_dir)
+
+        if "data" in training_params.losses_to_use:
+            Plt.make_data_parity_plots(gt_address, evals_address, working_dir)
+
+        if "PDE" in training_params.losses_to_use:
+            gt_f = nn_factory.f.numpy()
+            f_cols = [f"f_{k}" for k in range(len(gt_f))]
+            pd.DataFrame([gt_f], columns=f_cols).to_csv(
+                os.path.join(diagnosis_dir, "gt_f.csv"),
+                index=False,
+            )
+            eval_f = []
+            for j, input in enumerate(data):
+                eval_f.append(
+                    np.matmul(
+                        nn_factory.formulation.assemble_linear_system(input),
+                        evals[j, :],
+                    )
+                )
+
+            pd.concat(
+                [
+                    pd.DataFrame(data, columns=["eig_1", "eig_2", "theta"]),
+                    pd.DataFrame(eval_f, columns=f_cols),
+                ],
+                axis=1,
+            ).to_csv(
+                os.path.join(diagnosis_dir, f"f_evals_{titles[i]}.csv"), index=False
+            )
+
+            Plt.make_PDE_parity_plots(gt_f, np.array(eval_f), working_dir)
+
+    # nn_solver = nn_F.load_nn_solver(
+    #     os.path.join(output_dir, "nets"),
+    #     formulation_params.PDE,
+    # )
+    #
+
+    # data_types = ["training", "validation"]
+    # data = [training_data, validation_data]
+    # summary = pd.DataFrame()
+    # mse_loss = torch.nn.MSELoss()
+    # for i, type in enumerate(data_types):
+    #     evals = nn_solver.multiple_net_eval(torch.tensor(data[i][0])).detach()
+
+    #     summary[type + "_" + "r2"] = [r2_score(data[i][1], evals.numpy())]
+    #     summary[type + "_" + "mse"] = [mse_loss(torch.tensor(data[i][1]), evals).item()]
+
+    #     dir = os.path.join(output_dir, "parity_plots", type)
+
+    #     Plt.make_data_parity_plots(
+    #         os.path.join(output_dir, type + ".csv"),
+    #         evals.numpy(),
+    #         dir,
+    #     )
+    #     # print(f"{data = }")
+    #     # print(f"{data[0] = }")
+    #     # print(f"{data[0][0] = }")
+    #     # print(f"{data[0][0][0] = }")
+    #     # print(f"{data[i][0][0] = }")
+    #     # print(f"{evals.numpy()[0,:].shape = }")
+    #     # print(
+    #     #    f"{nn_factory.formulation.assemble_linear_system(data[i][0][0]).shape = }"
+    #     # )
+    #     print(f"{nn_factory.f.numpy() = }")
+    #     Plt.make_PDE_parity_plots(
+    #         nn_factory.f.numpy(),
+    #         np.array(
+    #             [
+    #                 np.matmul(
+    #                     nn_factory.formulation.assemble_linear_system(data[i][0][j]),
+    #                     evals.numpy()[j, :],
+    #                 )
+    #                 for j in range(nn_factory.f.numpy().shape[0])
+    #             ]
+    #         ),
+    #         dir,
+    #     )
+    # print("Summary stats = ")
+    # print(summary)
+    # summary.to_csv(os.path.join(output_dir, "summary_stats.csv"), index=False)
     return nn_solver
 
 

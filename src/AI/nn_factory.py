@@ -261,6 +261,32 @@ class nn_factory(ABC):
 
             losses.append([training_loss, validation_loss])
 
+            #     data_types = ["training", "validation"]
+            #     data = [training_data, validation_data]
+            #     # summary = pd.DataFrame()
+            #     mse_loss = torch.nn.MSELoss()
+
+            #     # import src.diagnostic_tools.plotting as Plt
+
+            #     for i, type in enumerate(data_types):
+            #         evals = self.nn_solver.multiple_net_eval(
+            #             torch.tensor(data[i][0])
+            #         ).detach()
+            #         print(f"{type} = {mse_loss(torch.tensor(data[i][1]), evals).item()}")
+            #         print()
+            # summary[type + "_" + "r2"] = [r2_score(data[i][1], evals.numpy())]
+            # summary[type + "_" + "mse"] = [mse_loss(torch.tensor(data[i][1]), evals).item()]
+
+            # dir = os.path.join(output_dir, "parity_plots", type)
+            # if not os.path.exists(dir):
+            #    os.makedirs(dir)
+
+            # Plt.make_parity_plots(
+            #     os.path.join(output_dir, type + ".csv"),
+            #     evals.numpy(),
+            #     dir,
+            # )
+
             if verbose:
                 print(f"epoch = {i+1}")
                 print(f"training loss = {training_loss}")
@@ -280,6 +306,7 @@ class nn_factory(ABC):
                     "Data_validation_loss",
                 ],
             ).to_csv(os.path.join(output_dir, "losses.csv"), index=False)
+
         self.activate_eval_mode()
         return self.get_nn_solver(), losses[-1][0][0], losses[-1][1][0]
 
