@@ -15,19 +15,39 @@ class Darcy_nn_factory(nn_F.nn_factory):
         return device, 4
 
     def calculate_PDE_loss(self, x_batch):
-        loss = 0
+        num = []
         for x in x_batch:
-            loss += self.PDE_loss_type(
+            num.append(
                 torch.matmul(
                     torch.from_numpy(
                         self.formulation.assemble_linear_system(x.numpy())
                     ),
                     self.nn_solver.single_net_eval(x),
-                ),
-                self.f,
+                ).unsqueeze(0),
             )
+        return self.PDE_loss_type(
+            torch.cat(num, dim=0),
+            self.f.unsqueeze(0).repeat(self.batch_size, 1),
+        )
 
-        return loss.mean()
+        # return self.data_loss_type(
+        #     self.nn_solver.multiple_net_eval(x_batch),
+        #     self.f,
+        # )
+        # loss = 0
+        # for x in x_batch:
+        #     loss += self.PDE_loss_type(
+        #         torch.matmul(
+        #             torch.from_numpy(
+        #                 self.formulation.assemble_linear_system(x.numpy())
+        #             ),
+        #             self.nn_solver.single_net_eval(x),
+        #         ),
+        #         self.f,
+        #     )
+        #     print(f"{loss = }")
+        # print(f"\n{loss = }")
+        # return loss.mean()
 
 
 # Given a triplet [eig_1, eig_2, theta] the trainer class
