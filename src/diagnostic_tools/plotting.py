@@ -114,7 +114,7 @@ def make_data_parity_plots(
         plt.text(
             0.05,
             0.95,
-            f"r2 = {r2_score(x_values,y_values):.3f}\nmse = {mean_squared_error(x_values,y_values):.3f}",
+            f"r2 = {r2_score(x_values,y_values):.3g}\nmse = {mean_squared_error(x_values,y_values):.3g}",
             transform=plt.gca().transAxes,
             verticalalignment="top",
             horizontalalignment="left",
@@ -166,7 +166,7 @@ def make_PDE_parity_plots(
         ax2.text(
             0.05,
             0.95,
-            f"mean = {np.mean(num_f):.3f}\nstd = {np.std(num_f):.3f}\nexact_f = {f_i:.3f}",
+            f"mean = {np.mean(num_f):.3g}\nstd = {np.std(num_f):.3g}\nexact_f = {f_i:.3g}",
             transform=plt.gca().transAxes,
             verticalalignment="top",
             horizontalalignment="left",
@@ -201,7 +201,7 @@ def diagnose_linear_system(
     plt.text(
         0.05,
         0.95,
-        f"mean = {np.mean(condition_nums):.3f}\nstd = {np.std(condition_nums):.3f}",
+        f"mean = {np.mean(condition_nums):.3g}\nstd = {np.std(condition_nums):.3g}",
         transform=plt.gca().transAxes,
         verticalalignment="top",
         horizontalalignment="left",
