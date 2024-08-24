@@ -19,6 +19,7 @@ def make_loss_plots(output_dir: str) -> None:
         plt.title(title)
         plt.xlabel("epochs")
         plt.ylabel("loss")
+        plt.yscale("log")
         plt.savefig(os.path.join(output_dir, title + ".png"))
         plt.close()
 
