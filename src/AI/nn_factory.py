@@ -57,7 +57,10 @@ class nn_solver(ABC):
         self.model_space = model_space
         return self
 
-    def multiple_net_eval(self, x: torch.tensor) -> torch.tensor:
+    def multiple_net_eval(
+        self,
+        x: torch.tensor,
+    ) -> torch.tensor:
         return torch.cat(
             [
                 net(
@@ -109,9 +112,7 @@ class nn_solver(ABC):
             ) as json_file:
                 json.dump(nn.nn_params_dataclass_to_dict(net.params), json_file)
 
-    def load_degree_and_device(
-        self, directory_path: str
-    ) -> (fe.Mesh, int, torch.device):
+    def load_degree_and_device(self, directory_path: str) -> (int, torch.device):
         with open(os.path.join(directory_path, "degree.json"), "r") as json_file:
             degree_json = json.load(json_file)
 
@@ -141,8 +142,9 @@ class nn_factory(ABC):
             device = torch.device("cpu")
         self.batch_size = training_params.batch_size
 
-        self.data_loss_type = torch.nn.MSELoss()
+        self.data_loss = torch.nn.MSELoss()
         self.PDE_loss_type = torch.nn.MSELoss()
+        self.BC_loss_type = torch.nn.MSELoss()
 
         if len(training_params.losses_to_use) > 2:
             ValueError(
@@ -155,6 +157,7 @@ class nn_factory(ABC):
                 return [
                     self.calculate_PDE_loss(x_batch),
                     self.calculate_data_loss(x_batch, y_batch),
+                    self.calculate_BC_loss(x_batch),
                 ]
 
         elif (
@@ -187,18 +190,49 @@ class nn_factory(ABC):
         self.dataless = "data" not in training_params.losses_to_use
         return device
 
-    def get_nn_solver(self):
-        return self.nn_solver
-
     def calculate_data_loss(
         self, x_batch: torch.tensor, y_batch: torch.tensor
     ) -> torch.tensor:
-        return 10000 * self.data_loss_type(
+        return 10000 * self.data_loss(
             self.nn_solver.multiple_net_eval(x_batch),
             y_batch,
         )
 
-    def define_optimizers(self, learn_rate: float) -> None:
+    def calculate_PDE_loss(self, x_batch):
+        return self.PDE_loss_type(
+            torch.tensor(
+                self.formulation.compute_multiple_actions_on(
+                    self.nn_solver.multiple_net_eval(x_batch).detach().numpy(),
+                    x_batch.numpy(),
+                )
+            ),
+            self.f.unsqueeze(1).repeat(1, x_batch.shape[0]),
+        )
+
+    def calculate_BC_loss(self, x_batch):
+        # print(f"{x_batch.shape = }")
+        bc_dofs = self.formulation.get_bc_dofs(
+            self.nn_solver.multiple_net_eval(x_batch)
+        )
+        # print(f"{bc_dofs.shape = }")
+        return 10000 * self.BC_loss_type(bc_dofs, torch.zeros_like(bc_dofs))
+
+        # loss = 0
+        # for x in x_batch:
+        #     loss += self.PDE_loss_type(
+        #         torch.tensor(
+        #             self.formulation.compute_single_action_on(
+        #                 self.nn_solver.single_net_eval(x).detach().numpy(), x.numpy()
+        #             )
+        #         ),
+        #         self.f,
+        #     )
+        # return loss.mean()
+
+    def get_nn_solver(self):
+        return self.nn_solver
+
+    def define_optimizers(self, learn_rate):
         self.optimizers = {}
         for net_name, net in self.nn_solver.nets.items():
             self.optimizers[net_name] = torch.optim.Adam(
@@ -207,9 +241,6 @@ class nn_factory(ABC):
 
     def train(self):
         self.nn_solver.train()
-
-    def activate_eval_mode(self):
-        self.nn_solver.eval_mode()
 
     def step(self):
         for optimizer in self.optimizers.values():
@@ -261,35 +292,9 @@ class nn_factory(ABC):
 
             losses.append([training_loss, validation_loss])
 
-            #     data_types = ["training", "validation"]
-            #     data = [training_data, validation_data]
-            #     # summary = pd.DataFrame()
-            #     mse_loss = torch.nn.MSELoss()
-
-            #     # import src.diagnostic_tools.plotting as Plt
-
-            #     for i, type in enumerate(data_types):
-            #         evals = self.nn_solver.multiple_net_eval(
-            #             torch.tensor(data[i][0])
-            #         ).detach()
-            #         print(f"{type} = {mse_loss(torch.tensor(data[i][1]), evals).item()}")
-            #         print()
-            # summary[type + "_" + "r2"] = [r2_score(data[i][1], evals.numpy())]
-            # summary[type + "_" + "mse"] = [mse_loss(torch.tensor(data[i][1]), evals).item()]
-
-            # dir = os.path.join(output_dir, "parity_plots", type)
-            # if not os.path.exists(dir):
-            #    os.makedirs(dir)
-
-            # Plt.make_parity_plots(
-            #     os.path.join(output_dir, type + ".csv"),
-            #     evals.numpy(),
-            #     dir,
-            # )
-
             if verbose:
-                print(f"epoch = {i+1}")
-                print(f"training loss = {training_loss}")
+                print(f"epoch = {i+1}", "Total, PDE, data, BC")
+                print(f"training loss   = {training_loss}")
                 print(f"validation loss = {validation_loss}\n")
         if save_losses:
             pd.DataFrame(
@@ -307,7 +312,6 @@ class nn_factory(ABC):
                 ],
             ).to_csv(os.path.join(output_dir, "losses.csv"), index=False)
 
-        self.activate_eval_mode()
         return self.get_nn_solver(), losses[-1][0][0], losses[-1][1][0]
 
     def one_grad_descent_iter(
@@ -316,9 +320,9 @@ class nn_factory(ABC):
         validation_loader: DataLoader = None,
         track_validation: bool = False,
     ) -> list:
-        training_loss = [[], [], []]
+        training_loss = [[], [], [], []]
         if track_validation:
-            validation_loss = [[], [], []]
+            validation_loss = [[], [], [], []]
         else:
             validation_loss = [[float("Nan")], [float("Nan")], [float("Nan")]]
 
@@ -332,6 +336,7 @@ class nn_factory(ABC):
             training_loss[0].append(total_loss.item())
             training_loss[1].append(losses[0].item())
             training_loss[2].append(losses[1].item())
+            training_loss[3].append(losses[2].item())
 
         if track_validation:
             for batch in validation_loader:
@@ -341,6 +346,7 @@ class nn_factory(ABC):
                 validation_loss[0].append(total_loss.item())
                 validation_loss[1].append(losses[0].item())
                 validation_loss[2].append(losses[1].item())
+                validation_loss[3].append(losses[2].item())
 
         return [np.array(loss).mean(axis=0) for loss in training_loss], [
             np.array(loss).mean(axis=0) for loss in validation_loss

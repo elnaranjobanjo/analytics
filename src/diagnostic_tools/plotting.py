@@ -95,32 +95,68 @@ def make_data_parity_plots(
     gt_address: str,
     evals_address: str,
     working_dir: str,
+    bc_indices: np.array = np.array([]),
 ) -> None:
 
-    dir = os.path.join(working_dir, "data_pplots")
-    if not os.path.exists(dir):
-        os.makedirs(dir)
+    bc_dir = os.path.join(working_dir, "data_pplots", "bc")
+    int_dir = os.path.join(working_dir, "data_pplots", "internal")
+
+    if not os.path.exists(bc_dir):
+        os.makedirs(bc_dir)
+
+    if not os.path.exists(int_dir):
+        os.makedirs(int_dir)
 
     gt, evals = extract_gt_and_evals(gt_address, evals_address)
-    for title in gt.columns:
+    for i, title in enumerate(gt.columns):
         x_values = gt[title].to_numpy()
         y_values = evals[title].to_numpy()
-        plt.scatter(x_values, y_values)
-        plt.plot(x_values, x_values, linestyle="--", color="red")
+        if i in bc_indices:
+            plt.hist(
+                y_values,
+                bins=max(int(len(y_values) / 10), 10),
+                alpha=0.75,
+                color="blue",
+            )
+            plt.title(f"Histogram {title}")
+            plt.xlabel(f"predicted {title}")
+            plt.ylabel("frequency")
+            plt.axvline(x=0, color="red", linestyle="--", linewidth=2, label="gt")
+            plt.axvline(
+                x=np.mean(y_values),
+                color="green",
+                linestyle="--",
+                linewidth=2,
+                label="mean of preds",
+            )
+            plt.text(
+                0.05,
+                0.95,
+                f"mean = {np.mean(y_values):.3g}\nstd = {np.std(y_values):.3g}\nexact_{title} = 0.000",
+                transform=plt.gca().transAxes,
+                verticalalignment="top",
+                horizontalalignment="left",
+            )
+            plt.legend(loc="upper right")
+            plt.savefig(os.path.join(bc_dir, f"{title}.png"))
+            plt.close()
+        else:
+            plt.scatter(x_values, y_values)
+            plt.plot(x_values, x_values, linestyle="--", color="red")
 
-        plt.title(f"data pplot {title}")
-        plt.xlabel("gt")
-        plt.ylabel("preds")
-        plt.text(
-            0.05,
-            0.95,
-            f"r2 = {r2_score(x_values,y_values):.3g}\nmse = {mean_squared_error(x_values,y_values):.3g}",
-            transform=plt.gca().transAxes,
-            verticalalignment="top",
-            horizontalalignment="left",
-        )
-        plt.savefig(os.path.join(dir, f"{title}.png"))
-        plt.close()
+            plt.title(f"data pplot {title}")
+            plt.xlabel("gt")
+            plt.ylabel("preds")
+            plt.text(
+                0.05,
+                0.95,
+                f"r2 = {r2_score(x_values,y_values):.3g}\nmse = {mean_squared_error(x_values,y_values):.3g}",
+                transform=plt.gca().transAxes,
+                verticalalignment="top",
+                horizontalalignment="left",
+            )
+            plt.savefig(os.path.join(int_dir, f"{title}.png"))
+            plt.close()
 
 
 def make_PDE_parity_plots(
@@ -171,7 +207,7 @@ def make_PDE_parity_plots(
             verticalalignment="top",
             horizontalalignment="left",
         )
-        fig2.legend()
+        fig2.legend(loc="upper right")
         fig2.savefig(os.path.join(dir, f"f_{i}.png"))
         plt.close(fig2)
 

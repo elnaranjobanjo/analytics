@@ -102,7 +102,12 @@ def do_train(
             os.makedirs(working_dir)
 
         if "data" in training_params.losses_to_use:
-            Plt.make_data_parity_plots(gt_address, evals_address, working_dir)
+            Plt.make_data_parity_plots(
+                gt_address,
+                evals_address,
+                working_dir,
+                bc_indices=nn_factory.formulation.get_bc_indices(),
+            )
 
         if "PDE" in training_params.losses_to_use:
             gt_f = nn_factory.f.numpy()
@@ -131,56 +136,6 @@ def do_train(
             )
 
             Plt.make_PDE_parity_plots(gt_f, np.array(eval_f), working_dir)
-
-    # nn_solver = nn_F.load_nn_solver(
-    #     os.path.join(output_dir, "nets"),
-    #     formulation_params.PDE,
-    # )
-    #
-
-    # data_types = ["training", "validation"]
-    # data = [training_data, validation_data]
-    # summary = pd.DataFrame()
-    # mse_loss = torch.nn.MSELoss()
-    # for i, type in enumerate(data_types):
-    #     evals = nn_solver.multiple_net_eval(torch.tensor(data[i][0])).detach()
-
-    #     summary[type + "_" + "r2"] = [r2_score(data[i][1], evals.numpy())]
-    #     summary[type + "_" + "mse"] = [mse_loss(torch.tensor(data[i][1]), evals).item()]
-
-    #     dir = os.path.join(output_dir, "parity_plots", type)
-
-    #     Plt.make_data_parity_plots(
-    #         os.path.join(output_dir, type + ".csv"),
-    #         evals.numpy(),
-    #         dir,
-    #     )
-    #     # print(f"{data = }")
-    #     # print(f"{data[0] = }")
-    #     # print(f"{data[0][0] = }")
-    #     # print(f"{data[0][0][0] = }")
-    #     # print(f"{data[i][0][0] = }")
-    #     # print(f"{evals.numpy()[0,:].shape = }")
-    #     # print(
-    #     #    f"{nn_factory.formulation.assemble_linear_system(data[i][0][0]).shape = }"
-    #     # )
-    #     print(f"{nn_factory.f.numpy() = }")
-    #     Plt.make_PDE_parity_plots(
-    #         nn_factory.f.numpy(),
-    #         np.array(
-    #             [
-    #                 np.matmul(
-    #                     nn_factory.formulation.assemble_linear_system(data[i][0][j]),
-    #                     evals.numpy()[j, :],
-    #                 )
-    #                 for j in range(nn_factory.f.numpy().shape[0])
-    #             ]
-    #         ),
-    #         dir,
-    #     )
-    # print("Summary stats = ")
-    # print(summary)
-    # summary.to_csv(os.path.join(output_dir, "summary_stats.csv"), index=False)
     return nn_solver
 
 
