@@ -1,0 +1,30 @@
+version: "3"
+
+tasks:
+  install:
+    desc: Install the analytics package and runtime dependencies.
+    cmds:
+      - python -m pip install --upgrade pip
+      - python -m pip install -e .[dev]
+
+  train:
+    desc: Train a neural surrogate defined by the JSON spec at CONFIG.
+    deps: [install]
+    cmds:
+      - |
+        : "${CONFIG:?Set CONFIG to the path of a training JSON spec.}"
+        python main.py "$CONFIG" -tasks train
+
+  hp-search:
+    desc: Run Ray Tune hyperparameter search for the JSON spec at CONFIG.
+    deps: [install]
+    cmds:
+      - |
+        : "${CONFIG:?Set CONFIG to the path of a training JSON spec.}"
+        python main.py "$CONFIG" -tasks hp_search
+
+  test:
+    desc: Execute the Fenics regression tests.
+    deps: [install]
+    cmds:
+      - pytest
