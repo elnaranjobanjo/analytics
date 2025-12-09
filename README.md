@@ -99,11 +99,8 @@ Everything is plain files, so shipping experiments to cloud storage or sharing a
 - **Dependencies**: managed through `pyproject.toml`. `task install` installs the project in editable mode so that `python main.py ...` finds the `src` namespace automatically. Torch, FEniCS, Ray Tune, pandas, numpy, matplotlib, and scikit-learn form the core stack.
 - **Style & Testing**: `task test` runs the Fenics regression suite via `pytest`, and you can plug in linters or type-checkers as needed; the project structure follows a standard `src/` layout to keep the interpreter path clean.
 - **Extensibility**: add new PDEs by extending `src/formulations`, wiring them into `src/FEM_solvers`, and adding a bespoke NN factory/solver pair under `src/AI/PDEs`. Because everything funnels through the same JSON contracts, existing tasks keep working.
-
-## Selling Points for Future Employers
-
-1. **Engineering Discipline** — deterministic Taskfile workflows, type-backed configuration parsing, cached datasets, and automated diagnostics go far beyond “ran a notebook once.”
-2. **Scientific Rigor** — coupling FEniCS ground truth with boundary-conditioned losses and Ray Tune sweeps shows we understand both the math and the ML infrastructure.
-3. **Operational Awareness** — outputs are organized for downstream registries/serving stacks, and everything (data, models, diagnostics) is captured in versionable folders ready for CI/CD.
+- **Operational focus**: every task writes deterministic artifacts (loss curves, parity plots, CSV summaries, cached datasets) so experiment lineage is auditable and deployment-ready.
+- **Scientific rigor**: combining PDE residual losses with data parity, tracking boundary conditions separately, and validating convergence in `test/` prevents silent regressions.
+- **Engineering discipline**: Taskfile workflows, type-backed configs, and Ray Tune search spaces ensure teammates can iterate predictably without spelunking through notebooks.
 
 Clone it, point `CONFIG` at your scenario, and you have an end-to-end PDE surrogate lab that future teammates can trust.
